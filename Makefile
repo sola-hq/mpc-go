@@ -6,7 +6,7 @@ BIN_DIR := bin
 all: build
 
 # Build both binaries
-build: mpcium mpc
+build: mpcium mpc benchmark
 
 # Install mpcium (builds and places it in $GOBIN or $GOPATH/bin)
 mpcium:
@@ -25,6 +25,9 @@ install:
 	sudo install -m 755 /tmp/mpcium-cli /usr/local/bin/
 	rm -f /tmp/mpcium /tmp/mpcium-cli
 	@echo "Successfully installed mpcium and mpcium-cli to /usr/local/bin/"
+# Install mpcium-benchmark
+benchmark:
+	go install ./cmd/mpcium-benchmark
 
 # Run all tests
 test:
