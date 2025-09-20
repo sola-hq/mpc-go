@@ -27,7 +27,10 @@ type BenchmarkResult struct {
 	MedianTime       time.Duration
 	OperationTimes   []time.Duration
 	ErrorRate        float64
-	OperationsPerSec float64
+	OperationsPerMin float64
+	BatchSize        int
+	TotalBatches     int
+	BatchTimes       []time.Duration
 }
 
 func main() {
@@ -80,6 +83,12 @@ func keygenBenchmarkCommand() *cli.Command {
 				Value:   30,
 				Aliases: []string{"t"},
 			},
+			&cli.IntFlag{
+				Name:    "batch-size",
+				Usage:   "Number of operations per batch",
+				Value:   10,
+				Aliases: []string{"b"},
+			},
 		},
 	}
 }
@@ -96,6 +105,12 @@ func ecdsaSignBenchmarkCommand() *cli.Command {
 				Usage:   "Timeout per operation in seconds",
 				Value:   30,
 				Aliases: []string{"t"},
+			},
+			&cli.IntFlag{
+				Name:    "batch-size",
+				Usage:   "Number of operations per batch",
+				Value:   10,
+				Aliases: []string{"b"},
 			},
 		},
 	}
@@ -114,6 +129,12 @@ func eddsaSignBenchmarkCommand() *cli.Command {
 				Value:   30,
 				Aliases: []string{"t"},
 			},
+			&cli.IntFlag{
+				Name:    "batch-size",
+				Usage:   "Number of operations per batch",
+				Value:   10,
+				Aliases: []string{"b"},
+			},
 		},
 	}
 }
@@ -130,6 +151,12 @@ func reshareBenchmarkCommand() *cli.Command {
 				Usage:   "Timeout per operation in seconds",
 				Value:   30,
 				Aliases: []string{"t"},
+			},
+			&cli.IntFlag{
+				Name:    "batch-size",
+				Usage:   "Number of operations per batch",
+				Value:   10,
+				Aliases: []string{"b"},
 			},
 			&cli.IntFlag{
 				Name:    "new-threshold",
@@ -156,10 +183,21 @@ func createMPCClient(cmd *cli.Command) (client.MPCClient, error) {
 		return nil, fmt.Errorf("failed to connect to NATS: %w", err)
 	}
 
-	opts := client.Options{
-		NatsConn: nc,
+	// Create a LocalSigner with the provided key path and password
+	signerOpts := client.LocalSignerOptions{
 		KeyPath:  keyPath,
 		Password: password,
+	}
+
+	// Default to Ed25519 for event initiator keys
+	signer, err := client.NewLocalSigner(types.EventInitiatorKeyTypeEd25519, signerOpts)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create signer: %w", err)
+	}
+
+	opts := client.Options{
+		NatsConn: nc,
+		Signer:   signer,
 	}
 	return client.NewMPCClient(opts), nil
 }
@@ -259,7 +297,7 @@ func runKeygenBenchmark(ctx context.Context, cmd *cli.Command) error {
 	totalTime := time.Since(startTime)
 
 	// Calculate results
-	benchResult := calculateBenchmarkResult(results, totalTime)
+	benchResult := calculateBenchmarkResult(results, totalTime, 1, []time.Duration{totalTime})
 	printBenchmarkResult("Keygen", benchResult)
 
 	return nil
@@ -287,13 +325,15 @@ func runSignBenchmark(ctx context.Context, cmd *cli.Command, keyType types.KeyTy
 	}
 
 	timeout := time.Duration(cmd.Int("timeout")) * time.Second
+	batchSize := cmd.Int("batch-size")
 
 	mpcClient, err := createMPCClient(cmd)
 	if err != nil {
 		return err
 	}
 
-	fmt.Printf("Starting %s signing benchmark with %d operations for wallet %s...\n", keyTypeName, n, walletID)
+	totalBatches := (n + batchSize - 1) / batchSize
+	fmt.Printf("Starting %s signing benchmark with %d operations (%d batches of %d) for wallet %s...\n", keyTypeName, n, totalBatches, batchSize, walletID)
 
 	var results []OperationResult
 	var wg sync.WaitGroup
@@ -322,47 +362,79 @@ func runSignBenchmark(ctx context.Context, cmd *cli.Command, keyType types.KeyTy
 		return fmt.Errorf("failed to set up result listener: %w", err)
 	}
 
-	// Run operations
+	// Run operations in batches
 	startTime := time.Now()
-	for i := 0; i < n; i++ {
-		txID := fmt.Sprintf("benchmark-%s-sign-%d-%d", keyTypeName, time.Now().UnixNano(), i)
+	var batchTimes []time.Duration
 
-		// Generate random transaction data
-		txData := make([]byte, 32)
-		rand.Read(txData)
-
-		msg := &types.SignTxMessage{
-			KeyType:             keyType,
-			WalletID:            walletID,
-			NetworkInternalCode: "benchmark",
-			TxID:                txID,
-			Tx:                  txData,
-		}
-
-		result := OperationResult{
-			ID:        txID,
-			StartTime: time.Now(),
-		}
-
-		mu.Lock()
-		results = append(results, result)
-		mu.Unlock()
-
-		wg.Add(1)
-
-		err := mpcClient.SignTransaction(msg)
-		if err != nil {
+	// Start progress reporting goroutine
+	progressTicker := time.NewTicker(10 * time.Second)
+	defer progressTicker.Stop()
+	go func() {
+		for range progressTicker.C {
 			mu.Lock()
-			results[i].Completed = true
-			results[i].Success = false
-			results[i].ErrorReason = err.Error()
-			results[i].EndTime = time.Now()
+			completed := 0
+			for _, r := range results {
+				if r.Completed {
+					completed++
+				}
+			}
 			mu.Unlock()
-			wg.Done()
+			fmt.Printf("Progress: %d/%d results received\n", completed, n)
+		}
+	}()
+
+	for batchNum := 0; batchNum < totalBatches; batchNum++ {
+		batchStart := time.Now()
+		batchStartIdx := batchNum * batchSize
+		batchEndIdx := batchStartIdx + batchSize
+		if batchEndIdx > n {
+			batchEndIdx = n
 		}
 
-		// Add small delay between operations
-		time.Sleep(10 * time.Millisecond)
+		fmt.Printf("Starting batch %d/%d (%d operations)...\n", batchNum+1, totalBatches, batchEndIdx-batchStartIdx)
+
+		for i := batchStartIdx; i < batchEndIdx; i++ {
+			txID := fmt.Sprintf("benchmark-%s-sign-%d-%d", keyTypeName, time.Now().UnixNano(), i)
+
+			// Generate random transaction data
+			txData := make([]byte, 32)
+			rand.Read(txData)
+
+			msg := &types.SignTxMessage{
+				KeyType:             keyType,
+				WalletID:            walletID,
+				NetworkInternalCode: "benchmark",
+				TxID:                txID,
+				Tx:                  txData,
+			}
+
+			result := OperationResult{
+				ID:        txID,
+				StartTime: time.Now(),
+			}
+
+			mu.Lock()
+			results = append(results, result)
+			mu.Unlock()
+
+			wg.Add(1)
+
+			err := mpcClient.SignTransaction(msg)
+			if err != nil {
+				mu.Lock()
+				results[i].Completed = true
+				results[i].Success = false
+				results[i].ErrorReason = err.Error()
+				results[i].EndTime = time.Now()
+				mu.Unlock()
+				wg.Done()
+			}
+
+			// Add small delay between operations
+			time.Sleep(10 * time.Millisecond)
+		}
+
+		batchTimes = append(batchTimes, time.Since(batchStart))
 	}
 
 	// Wait for all operations with timeout
@@ -382,7 +454,7 @@ func runSignBenchmark(ctx context.Context, cmd *cli.Command, keyType types.KeyTy
 	totalTime := time.Since(startTime)
 
 	// Calculate results
-	benchResult := calculateBenchmarkResult(results, totalTime)
+	benchResult := calculateBenchmarkResult(results, totalTime, batchSize, batchTimes)
 	printBenchmarkResult(fmt.Sprintf("%s Signing", keyTypeName), benchResult)
 
 	return nil
@@ -505,7 +577,7 @@ func runReshareBenchmark(ctx context.Context, cmd *cli.Command) error {
 	totalTime := time.Since(startTime)
 
 	// Calculate results
-	benchResult := calculateBenchmarkResult(results, totalTime)
+	benchResult := calculateBenchmarkResult(results, totalTime, 1, []time.Duration{totalTime})
 	printBenchmarkResult("Reshare", benchResult)
 
 	return nil
@@ -533,7 +605,7 @@ func parseNumOps(numOps string) (int, error) {
 	return n, nil
 }
 
-func calculateBenchmarkResult(results []OperationResult, totalTime time.Duration) BenchmarkResult {
+func calculateBenchmarkResult(results []OperationResult, totalTime time.Duration, batchSize int, batchTimes []time.Duration) BenchmarkResult {
 	var operationTimes []time.Duration
 	successfulOps := 0
 	failedOps := 0
@@ -577,8 +649,8 @@ func calculateBenchmarkResult(results []OperationResult, totalTime time.Duration
 			medianTime = operationTimes[len(operationTimes)/2]
 		}
 
-		// Calculate operations per second
-		operationsPerSec = float64(successfulOps) / totalTime.Seconds()
+		// Calculate operations per minute
+		operationsPerSec = float64(successfulOps) / totalTime.Minutes()
 	}
 
 	return BenchmarkResult{
@@ -590,25 +662,60 @@ func calculateBenchmarkResult(results []OperationResult, totalTime time.Duration
 		MedianTime:       medianTime,
 		OperationTimes:   operationTimes,
 		ErrorRate:        errorRate,
-		OperationsPerSec: operationsPerSec,
+		OperationsPerMin: operationsPerSec,
+		BatchSize:        batchSize,
+		TotalBatches:     len(batchTimes),
+		BatchTimes:       batchTimes,
 	}
 }
 
 func printBenchmarkResult(operationType string, result BenchmarkResult) {
-	fmt.Printf("\n=== %s Benchmark Results ===\n", operationType)
-	fmt.Printf("Total Operations:     %d\n", result.TotalOperations)
-	fmt.Printf("Successful:           %d\n", result.SuccessfulOps)
-	fmt.Printf("Failed:               %d\n", result.FailedOps)
-	fmt.Printf("Error Rate:           %.2f%%\n", result.ErrorRate)
-	fmt.Printf("Total Time:           %v\n", result.TotalTime)
-	fmt.Printf("Average Time/Op:      %v\n", result.AverageTime)
-	fmt.Printf("Median Time/Op:       %v\n", result.MedianTime)
-	fmt.Printf("Operations/Second:    %.2f\n", result.OperationsPerSec)
+	fmt.Println()
+	fmt.Println("===============================")
+	fmt.Printf("BENCHMARK RESULTS SUMMARY\n")
+	fmt.Println("===============================")
+	fmt.Printf("Total benchmark time: %v\n", result.TotalTime)
+	fmt.Printf("Total batches sent: %d\n", result.TotalBatches)
+	fmt.Printf("Total requests sent: %d\n", result.TotalOperations)
+	fmt.Printf("Successful completions: %d\n", result.SuccessfulOps)
+	fmt.Printf("Success rate: %.2f%%\n", 100.0-result.ErrorRate)
+	fmt.Printf("Average signs per minute: %.2f\n", result.OperationsPerMin)
 
-	if len(result.OperationTimes) > 0 {
-		fmt.Printf("Min Time/Op:          %v\n", result.OperationTimes[0])
-		fmt.Printf("Max Time/Op:          %v\n", result.OperationTimes[len(result.OperationTimes)-1])
+	fmt.Println()
+	fmt.Println("------------------------------")
+	fmt.Printf("%d REQUEST ANALYSIS\n", result.BatchSize)
+	fmt.Println("------------------------------")
+
+	if len(result.OperationTimes) >= result.BatchSize {
+		firstNResults := result.OperationTimes[:result.BatchSize]
+		if len(firstNResults) > len(result.OperationTimes) {
+			firstNResults = result.OperationTimes
+		}
+
+		completedCount := len(firstNResults)
+		if completedCount > result.BatchSize {
+			completedCount = result.BatchSize
+		}
+
+		fmt.Printf("Completed from first %d: %d/%d\n", result.BatchSize, completedCount, result.BatchSize)
+
+		if len(firstNResults) > 0 {
+			var totalTime time.Duration
+			minTime := firstNResults[0]
+			maxTime := firstNResults[0]
+
+			for _, t := range firstNResults {
+				totalTime += t
+				if t < minTime {
+					minTime = t
+				}
+				if t > maxTime {
+					maxTime = t
+				}
+			}
+
+			fmt.Printf("Fastest (first %d): %v\n", result.BatchSize, minTime)
+			fmt.Printf("Slowest (first %d): %v\n", result.BatchSize, maxTime)
+		}
 	}
-
-	fmt.Println("=====================================")
 }
