@@ -423,3 +423,31 @@ go test ./... -v
 cd e2e
 make test
 ```
+
+## Benchmarking
+
+Test MPC performance with the integrated benchmark tool:
+
+### Keygen Benchmark
+```bash
+# Test wallet creation
+mpcium-cli benchmark keygen 10
+
+# With config and output file
+mpcium-cli benchmark --config config.yaml --output results.txt keygen 50
+```
+
+### Signing Benchmark
+```bash
+# Test ECDSA signing
+mpcium-cli benchmark sign-ecdsa 100 wallet-id
+
+# Test EdDSA signing
+mpcium-cli benchmark sign-eddsa 100 wallet-id
+
+# With custom batch size and output
+mpcium-cli benchmark --config config.yaml --output signing-results.txt \
+  sign-ecdsa 1000 wallet-id --batch-size 20
+```
+
+Use `--prompt-password` for secure key password input and `--help` for all options.

@@ -3,19 +3,25 @@ package main
 import (
 	"context"
 	"crypto/rand"
+	"encoding/hex"
 	"fmt"
-	"log"
 	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/fystack/mpcium/pkg/client"
+	"github.com/fystack/mpcium/pkg/config"
+	"github.com/fystack/mpcium/pkg/constant"
 	"github.com/fystack/mpcium/pkg/event"
+	"github.com/fystack/mpcium/pkg/logger"
 	"github.com/fystack/mpcium/pkg/types"
 	"github.com/nats-io/nats.go"
 	"github.com/urfave/cli/v3"
+	"golang.org/x/term"
 )
 
 type BenchmarkResult struct {
@@ -33,9 +39,19 @@ type BenchmarkResult struct {
 	BatchTimes       []time.Duration
 }
 
-func main() {
-	app := &cli.Command{
-		Name:        "mpcium-benchmark",
+type OperationResult struct {
+	ID          string
+	StartTime   time.Time
+	EndTime     time.Time
+	Completed   bool
+	Success     bool
+	ErrorReason string
+	ErrorCode   string
+}
+
+func benchmarkCommand() *cli.Command {
+	return &cli.Command{
+		Name:        "benchmark",
 		Usage:       "Benchmark tool for MPC operations",
 		Description: "Run benchmarks for keygen, signing (ECDSA/EdDSA), and resharing operations",
 		Commands: []*cli.Command{
@@ -46,10 +62,10 @@ func main() {
 		},
 		Flags: []cli.Flag{
 			&cli.StringFlag{
-				Name:     "nats-url",
-				Usage:    "NATS server URL",
-				Value:    "nats://localhost:4222",
-				Category: "connection",
+				Name:     "config",
+				Aliases:  []string{"c"},
+				Usage:    "Path to configuration file",
+				Category: "configuration",
 			},
 			&cli.StringFlag{
 				Name:     "key-path",
@@ -57,16 +73,27 @@ func main() {
 				Value:    "./event_initiator.key",
 				Category: "authentication",
 			},
-			&cli.StringFlag{
-				Name:     "password",
-				Usage:    "Password for encrypted key (if needed)",
+			&cli.BoolFlag{
+				Name:     "prompt-password",
+				Aliases:  []string{"p"},
+				Usage:    "Prompt for encrypted key password (secure)",
+				Value:    false,
 				Category: "authentication",
 			},
+			&cli.BoolFlag{
+				Name:     "debug",
+				Usage:    "Enable debug logging",
+				Value:    false,
+				Category: "logging",
+			},
+			&cli.StringFlag{
+				Name:     "output",
+				Aliases:  []string{"o"},
+				Usage:    "Output file for benchmark results",
+				Value:    "benchmark/output.txt",
+				Category: "output",
+			},
 		},
-	}
-
-	if err := app.Run(context.Background(), os.Args); err != nil {
-		log.Fatal(err)
 	}
 }
 
@@ -80,7 +107,7 @@ func keygenBenchmarkCommand() *cli.Command {
 			&cli.IntFlag{
 				Name:    "timeout",
 				Usage:   "Timeout per operation in seconds",
-				Value:   30,
+				Value:   60,
 				Aliases: []string{"t"},
 			},
 			&cli.IntFlag{
@@ -103,7 +130,7 @@ func ecdsaSignBenchmarkCommand() *cli.Command {
 			&cli.IntFlag{
 				Name:    "timeout",
 				Usage:   "Timeout per operation in seconds",
-				Value:   30,
+				Value:   60,
 				Aliases: []string{"t"},
 			},
 			&cli.IntFlag{
@@ -126,7 +153,7 @@ func eddsaSignBenchmarkCommand() *cli.Command {
 			&cli.IntFlag{
 				Name:    "timeout",
 				Usage:   "Timeout per operation in seconds",
-				Value:   30,
+				Value:   60,
 				Aliases: []string{"t"},
 			},
 			&cli.IntFlag{
@@ -149,7 +176,7 @@ func reshareBenchmarkCommand() *cli.Command {
 			&cli.IntFlag{
 				Name:    "timeout",
 				Usage:   "Timeout per operation in seconds",
-				Value:   30,
+				Value:   60,
 				Aliases: []string{"t"},
 			},
 			&cli.IntFlag{
@@ -174,13 +201,32 @@ func reshareBenchmarkCommand() *cli.Command {
 }
 
 func createMPCClient(cmd *cli.Command) (client.MPCClient, error) {
-	natsURL := cmd.String("nats-url")
+	configPath := cmd.String("config")
 	keyPath := cmd.String("key-path")
-	password := cmd.String("password")
+	promptPassword := cmd.Bool("prompt-password")
+	debug := cmd.Bool("debug")
 
-	nc, err := nats.Connect(natsURL)
+	// Initialize configuration
+	config.InitViperConfig(configPath)
+	appConfig := config.LoadConfig()
+	environment := appConfig.Environment
+
+	// Initialize logger
+	logger.Init(environment, debug)
+
+	// Create NATS connection using the same logic as main mpcium
+	nc, err := getNATSConnection(environment, appConfig)
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to NATS: %w", err)
+	}
+
+	// Handle password prompting
+	var password string
+	if promptPassword {
+		password, err = promptForPassword()
+		if err != nil {
+			return nil, fmt.Errorf("failed to get password: %w", err)
+		}
 	}
 
 	// Create a LocalSigner with the provided key path and password
@@ -200,6 +246,85 @@ func createMPCClient(cmd *cli.Command) (client.MPCClient, error) {
 		Signer:   signer,
 	}
 	return client.NewMPCClient(opts), nil
+}
+
+// promptForPassword securely prompts for a password without echoing to terminal
+func promptForPassword() (string, error) {
+	fmt.Print("Enter password for encrypted key: ")
+	passwordBytes, err := term.ReadPassword(int(syscall.Stdin))
+	fmt.Println() // Add newline after password input
+	if err != nil {
+		return "", fmt.Errorf("failed to read password: %w", err)
+	}
+
+	password := string(passwordBytes)
+	if len(password) == 0 {
+		return "", fmt.Errorf("password cannot be empty")
+	}
+
+	return password, nil
+}
+
+// generateUniqueID creates a highly unique ID for benchmark operations
+func generateUniqueID(prefix string) string {
+	// Generate random bytes for extra uniqueness
+	randomBytes := make([]byte, 8)
+	if _, err := rand.Read(randomBytes); err != nil {
+		// Fallback to timestamp-only if random generation fails
+		return fmt.Sprintf("%s-%d-%d", prefix, time.Now().UnixNano(), os.Getpid())
+	}
+	randomHex := hex.EncodeToString(randomBytes)
+	
+	// Combine timestamp, process ID, and random bytes
+	return fmt.Sprintf("%s-%d-%d-%s", prefix, time.Now().UnixNano(), os.Getpid(), randomHex)
+}
+
+// getNATSConnection creates a NATS connection with proper TLS configuration
+// This is similar to GetNATSConnection in cmd/mpcium/main.go
+func getNATSConnection(environment string, appConfig *config.AppConfig) (*nats.Conn, error) {
+	url := appConfig.NATs.URL
+	opts := []nats.Option{
+		nats.MaxReconnects(-1), // retry forever
+		nats.ReconnectWait(2 * time.Second),
+		nats.DisconnectHandler(func(nc *nats.Conn) {
+			logger.Warn("Disconnected from NATS")
+		}),
+		nats.ReconnectHandler(func(nc *nats.Conn) {
+			logger.Info("Reconnected to NATS", "url", nc.ConnectedUrl())
+		}),
+		nats.ClosedHandler(func(nc *nats.Conn) {
+			logger.Info("NATS connection closed!")
+		}),
+	}
+
+	if environment == constant.EnvProduction {
+		// Load TLS config from configuration
+		var clientCert, clientKey, caCert string
+		if appConfig.NATs.TLS != nil {
+			clientCert = appConfig.NATs.TLS.ClientCert
+			clientKey = appConfig.NATs.TLS.ClientKey
+			caCert = appConfig.NATs.TLS.CACert
+		}
+
+		// Fallback to default paths if not configured
+		if clientCert == "" {
+			clientCert = filepath.Join(".", "certs", "client-cert.pem")
+		}
+		if clientKey == "" {
+			clientKey = filepath.Join(".", "certs", "client-key.pem")
+		}
+		if caCert == "" {
+			caCert = filepath.Join(".", "certs", "rootCA.pem")
+		}
+
+		opts = append(opts,
+			nats.ClientCert(clientCert, clientKey),
+			nats.RootCAs(caCert),
+			nats.UserInfo(appConfig.NATs.Username, appConfig.NATs.Password),
+		)
+	}
+
+	return nats.Connect(url, opts...)
 }
 
 func runKeygenBenchmark(ctx context.Context, cmd *cli.Command) error {
@@ -252,7 +377,8 @@ func runKeygenBenchmark(ctx context.Context, cmd *cli.Command) error {
 	// Run operations
 	startTime := time.Now()
 	for i := 0; i < n; i++ {
-		walletID := fmt.Sprintf("benchmark-keygen-%d-%d", time.Now().UnixNano(), i)
+		// Generate unique wallet ID to avoid duplicates across runs
+		walletID := generateUniqueID(fmt.Sprintf("benchmark-keygen-%d", i))
 
 		result := OperationResult{
 			ID:        walletID,
@@ -298,7 +424,10 @@ func runKeygenBenchmark(ctx context.Context, cmd *cli.Command) error {
 
 	// Calculate results
 	benchResult := calculateBenchmarkResult(results, totalTime, 1, []time.Duration{totalTime})
-	printBenchmarkResult("Keygen", benchResult)
+	outputFile := cmd.String("output")
+	if err := printBenchmarkResult("Keygen", benchResult, outputFile); err != nil {
+		return fmt.Errorf("failed to write benchmark results: %w", err)
+	}
 
 	return nil
 }
@@ -334,6 +463,7 @@ func runSignBenchmark(ctx context.Context, cmd *cli.Command, keyType types.KeyTy
 
 	totalBatches := (n + batchSize - 1) / batchSize
 	fmt.Printf("Starting %s signing benchmark with %d operations (%d batches of %d) for wallet %s...\n", keyTypeName, n, totalBatches, batchSize, walletID)
+	fmt.Printf("Note: If you see 'Duplicate signing request detected' errors, wait a few minutes between benchmark runs\n")
 
 	var results []OperationResult
 	var wg sync.WaitGroup
@@ -394,11 +524,15 @@ func runSignBenchmark(ctx context.Context, cmd *cli.Command, keyType types.KeyTy
 		fmt.Printf("Starting batch %d/%d (%d operations)...\n", batchNum+1, totalBatches, batchEndIdx-batchStartIdx)
 
 		for i := batchStartIdx; i < batchEndIdx; i++ {
-			txID := fmt.Sprintf("benchmark-%s-sign-%d-%d", keyTypeName, time.Now().UnixNano(), i)
+			// Generate unique transaction ID to avoid duplicates across runs
+			txID := generateUniqueID(fmt.Sprintf("benchmark-%s-sign-%d", keyTypeName, i))
 
 			// Generate random transaction data
 			txData := make([]byte, 32)
-			rand.Read(txData)
+			if _, err := rand.Read(txData); err != nil {
+				// Use zero bytes if random generation fails (still valid for benchmark)
+				txData = make([]byte, 32)
+			}
 
 			msg := &types.SignTxMessage{
 				KeyType:             keyType,
@@ -455,7 +589,10 @@ func runSignBenchmark(ctx context.Context, cmd *cli.Command, keyType types.KeyTy
 
 	// Calculate results
 	benchResult := calculateBenchmarkResult(results, totalTime, batchSize, batchTimes)
-	printBenchmarkResult(fmt.Sprintf("%s Signing", keyTypeName), benchResult)
+	outputFile := cmd.String("output")
+	if err := printBenchmarkResult(fmt.Sprintf("%s Signing", keyTypeName), benchResult, outputFile); err != nil {
+		return fmt.Errorf("failed to write benchmark results: %w", err)
+	}
 
 	return nil
 }
@@ -524,7 +661,8 @@ func runReshareBenchmark(ctx context.Context, cmd *cli.Command) error {
 	// Run operations
 	startTime := time.Now()
 	for i := 0; i < n; i++ {
-		sessionID := fmt.Sprintf("benchmark-reshare-%d-%d", time.Now().UnixNano(), i)
+		// Generate unique session ID to avoid duplicates across runs
+		sessionID := generateUniqueID(fmt.Sprintf("benchmark-reshare-%d", i))
 
 		msg := &types.ResharingMessage{
 			SessionID:    sessionID,
@@ -578,19 +716,12 @@ func runReshareBenchmark(ctx context.Context, cmd *cli.Command) error {
 
 	// Calculate results
 	benchResult := calculateBenchmarkResult(results, totalTime, 1, []time.Duration{totalTime})
-	printBenchmarkResult("Reshare", benchResult)
+	outputFile := cmd.String("output")
+	if err := printBenchmarkResult("Reshare", benchResult, outputFile); err != nil {
+		return fmt.Errorf("failed to write benchmark results: %w", err)
+	}
 
 	return nil
-}
-
-type OperationResult struct {
-	ID          string
-	StartTime   time.Time
-	EndTime     time.Time
-	Completed   bool
-	Success     bool
-	ErrorReason string
-	ErrorCode   string
 }
 
 func parseNumOps(numOps string) (int, error) {
@@ -669,22 +800,51 @@ func calculateBenchmarkResult(results []OperationResult, totalTime time.Duration
 	}
 }
 
-func printBenchmarkResult(operationType string, result BenchmarkResult) {
-	fmt.Println()
-	fmt.Println("===============================")
-	fmt.Printf("BENCHMARK RESULTS SUMMARY\n")
-	fmt.Println("===============================")
-	fmt.Printf("Total benchmark time: %v\n", result.TotalTime)
-	fmt.Printf("Total batches sent: %d\n", result.TotalBatches)
-	fmt.Printf("Total requests sent: %d\n", result.TotalOperations)
-	fmt.Printf("Successful completions: %d\n", result.SuccessfulOps)
-	fmt.Printf("Success rate: %.2f%%\n", 100.0-result.ErrorRate)
-	fmt.Printf("Average signs per minute: %.2f\n", result.OperationsPerMin)
+func printBenchmarkResult(operationType string, result BenchmarkResult, outputFile string) error {
+	// Generate the benchmark report content
+	reportContent := generateBenchmarkReport(operationType, result)
 
-	fmt.Println()
-	fmt.Println("------------------------------")
-	fmt.Printf("%d REQUEST ANALYSIS\n", result.BatchSize)
-	fmt.Println("------------------------------")
+	// Print to console
+	fmt.Print(reportContent)
+
+	// Write to file if specified
+	if outputFile != "" {
+		if err := writeBenchmarkToFile(reportContent, outputFile, operationType); err != nil {
+			return fmt.Errorf("failed to write to file %s: %w", outputFile, err)
+		}
+		fmt.Printf("\nBenchmark results written to: %s\n", outputFile)
+	}
+
+	return nil
+}
+
+func generateBenchmarkReport(operationType string, result BenchmarkResult) string {
+	var report strings.Builder
+
+	report.WriteString("\n")
+	report.WriteString("===============================\n")
+	report.WriteString(fmt.Sprintf("%s BENCHMARK RESULTS SUMMARY\n", strings.ToUpper(operationType)))
+	report.WriteString("===============================\n")
+	report.WriteString(fmt.Sprintf("Timestamp: %s\n", time.Now().Format(time.RFC3339)))
+	report.WriteString(fmt.Sprintf("Operation Type: %s\n", operationType))
+	report.WriteString(fmt.Sprintf("Total benchmark time: %v\n", result.TotalTime))
+	report.WriteString(fmt.Sprintf("Total batches sent: %d\n", result.TotalBatches))
+	report.WriteString(fmt.Sprintf("Total requests sent: %d\n", result.TotalOperations))
+	report.WriteString(fmt.Sprintf("Successful completions: %d\n", result.SuccessfulOps))
+	report.WriteString(fmt.Sprintf("Failed operations: %d\n", result.FailedOps))
+	report.WriteString(fmt.Sprintf("Success rate: %.2f%%\n", 100.0-result.ErrorRate))
+	report.WriteString(fmt.Sprintf("Error rate: %.2f%%\n", result.ErrorRate))
+	report.WriteString(fmt.Sprintf("Average operations per minute: %.2f\n", result.OperationsPerMin))
+
+	if len(result.OperationTimes) > 0 {
+		report.WriteString(fmt.Sprintf("Average operation time: %v\n", result.AverageTime))
+		report.WriteString(fmt.Sprintf("Median operation time: %v\n", result.MedianTime))
+	}
+
+	report.WriteString("\n")
+	report.WriteString("------------------------------\n")
+	report.WriteString(fmt.Sprintf("%d REQUEST ANALYSIS\n", result.BatchSize))
+	report.WriteString("------------------------------\n")
 
 	if len(result.OperationTimes) >= result.BatchSize {
 		firstNResults := result.OperationTimes[:result.BatchSize]
@@ -697,7 +857,7 @@ func printBenchmarkResult(operationType string, result BenchmarkResult) {
 			completedCount = result.BatchSize
 		}
 
-		fmt.Printf("Completed from first %d: %d/%d\n", result.BatchSize, completedCount, result.BatchSize)
+		report.WriteString(fmt.Sprintf("Completed from first %d: %d/%d\n", result.BatchSize, completedCount, result.BatchSize))
 
 		if len(firstNResults) > 0 {
 			var totalTime time.Duration
@@ -714,8 +874,44 @@ func printBenchmarkResult(operationType string, result BenchmarkResult) {
 				}
 			}
 
-			fmt.Printf("Fastest (first %d): %v\n", result.BatchSize, minTime)
-			fmt.Printf("Slowest (first %d): %v\n", result.BatchSize, maxTime)
+			report.WriteString(fmt.Sprintf("Fastest (first %d): %v\n", result.BatchSize, minTime))
+			report.WriteString(fmt.Sprintf("Slowest (first %d): %v\n", result.BatchSize, maxTime))
 		}
 	}
+
+	report.WriteString("\n")
+
+	return report.String()
+}
+
+func writeBenchmarkToFile(content, outputFile, operationType string) (err error) {
+	// Create directory if it doesn't exist
+	dir := filepath.Dir(outputFile)
+	if err := os.MkdirAll(dir, 0750); err != nil {
+		return fmt.Errorf("failed to create directory %s: %w", dir, err)
+	}
+	
+	// Open file for appending (create if doesn't exist)
+	file, err := os.OpenFile(outputFile, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600)
+	if err != nil {
+		return fmt.Errorf("failed to open file: %w", err)
+	}
+	defer func() {
+		if closeErr := file.Close(); closeErr != nil && err == nil {
+			err = fmt.Errorf("failed to close file: %w", closeErr)
+		}
+	}()
+	
+	// Write content to file
+	if _, err := file.WriteString(content); err != nil {
+		return fmt.Errorf("failed to write content: %w", err)
+	}
+	
+	// Add separator for multiple benchmark runs
+	separator := fmt.Sprintf("\n%s\n\n", strings.Repeat("=", 80))
+	if _, err := file.WriteString(separator); err != nil {
+		return fmt.Errorf("failed to write separator: %w", err)
+	}
+	
+	return nil
 }
