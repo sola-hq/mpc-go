@@ -26,6 +26,7 @@ func main() {
 			},
 		},
 		Commands: []*cli.Command{
+			benchmarkCommand(),
 			{
 				Name:   "generate-peers",
 				Usage:  "Generate a new peers.json file",
