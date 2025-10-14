@@ -25,8 +25,8 @@ import (
 	"github.com/fystack/mpcium/pkg/security"
 	"github.com/hashicorp/consul/api"
 	"github.com/nats-io/nats.go"
+	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
-	"github.com/urfave/cli/v3"
 	"golang.org/x/term"
 )
 
@@ -36,80 +36,66 @@ const (
 )
 
 func main() {
-	app := &cli.Command{
-		Name:    "mpcium",
-		Usage:   "Multi-Party Computation node for threshold signatures",
-		Version: Version,
-		Commands: []*cli.Command{
-			{
-				Name:  "start",
-				Usage: "Start an MPCIUM node",
-				Flags: []cli.Flag{
-					&cli.StringFlag{
-						Name:     "name",
-						Aliases:  []string{"n"},
-						Usage:    "Node name",
-						Required: true,
-					},
-					&cli.StringFlag{
-						Name:    "config",
-						Aliases: []string{"c"},
-						Usage:   "Path to configuration file",
-					},
-					&cli.BoolFlag{
-						Name:    "decrypt-private-key",
-						Aliases: []string{"d"},
-						Value:   false,
-						Usage:   "Decrypt node private key",
-					},
-					&cli.BoolFlag{
-						Name:    "prompt-credentials",
-						Aliases: []string{"p"},
-						Usage:   "Prompt for sensitive parameters",
-					},
-					&cli.StringFlag{
-						Name:    "password-file",
-						Aliases: []string{"f"},
-						Usage:   "Path to file containing BadgerDB password",
-					},
-					&cli.StringFlag{
-						Name:    "identity-password-file",
-						Aliases: []string{"k"},
-						Usage:   "Path to file containing password for decrypting .age encrypted node private key",
-					},
-					&cli.BoolFlag{
-						Name:  "debug",
-						Usage: "Enable debug logging",
-						Value: false,
-					},
-				},
-				Action: runNode,
-			},
-			{
-				Name:  "version",
-				Usage: "Display detailed version information",
-				Action: func(ctx context.Context, c *cli.Command) error {
-					fmt.Printf("mpcium version %s\n", Version)
-					return nil
-				},
-			},
+	var rootCmd = &cobra.Command{
+		Use:   "mpc-node",
+		Short: "MPC Node",
+		Long:  "Multi-Party Computation node for threshold signatures",
+	}
+
+	var startCmd = &cobra.Command{
+		Use:   "start",
+		Short: "Start an MPC node",
+		Long:  "Start an MPC node with the specified configuration",
+		RunE:  runNode,
+	}
+
+	startCmd.Flags().StringP("name", "n", "", "Node name (required)")
+	startCmd.Flags().StringP("config", "c", "", "Path to configuration file")
+	startCmd.Flags().BoolP("decrypt-private-key", "d", false, "Decrypt node private key")
+	startCmd.Flags().BoolP("prompt-credentials", "p", false, "Prompt for sensitive parameters")
+	startCmd.Flags().StringP("password-file", "f", "", "Path to file containing BadgerDB password")
+	startCmd.Flags().StringP("identity-password-file", "k", "", "Path to file containing password for decrypting .age encrypted node private key")
+	startCmd.Flags().Bool("debug", false, "Enable debug logging")
+
+	startCmd.MarkFlagRequired("name")
+
+	var versionCmd = &cobra.Command{
+		Use:   "version",
+		Short: "Display version",
+		Long:  "Display version",
+		Run: func(cmd *cobra.Command, args []string) {
+			fmt.Printf("mpc-node version %s\n", Version)
 		},
 	}
 
-	if err := app.Run(context.Background(), os.Args); err != nil {
+	rootCmd.AddCommand(startCmd)
+	rootCmd.AddCommand(versionCmd)
+
+	if err := rootCmd.Execute(); err != nil {
 		fmt.Println(err)
 		os.Exit(1)
 	}
 }
 
-func runNode(ctx context.Context, c *cli.Command) error {
-	nodeName := c.String("name")
-	configPath := c.String("config")
-	decryptPrivateKey := c.Bool("decrypt-private-key")
-	usePrompts := c.Bool("prompt-credentials")
-	passwordFile := c.String("password-file")
-	agePasswordFile := c.String("identity-password-file")
-	debug := c.Bool("debug")
+func NewStartCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "start",
+		Short: "Start an MPC node",
+		Long:  "Start an MPC node with the specified configuration",
+		RunE:  runNode,
+	}
+}
+
+func runNode(cmd *cobra.Command, args []string) error {
+	nodeName, _ := cmd.Flags().GetString("name")
+	configPath, _ := cmd.Flags().GetString("config")
+	decryptPrivateKey, _ := cmd.Flags().GetBool("decrypt-private-key")
+	usePrompts, _ := cmd.Flags().GetBool("prompt-credentials")
+	passwordFile, _ := cmd.Flags().GetString("password-file")
+	agePasswordFile, _ := cmd.Flags().GetString("identity-password-file")
+	debug, _ := cmd.Flags().GetBool("debug")
+
+	ctx := context.Background()
 
 	viper.SetDefault("backup_enabled", true)
 	config.InitViperConfig(configPath)
@@ -289,6 +275,7 @@ func runNode(ctx context.Context, c *cli.Command) error {
 		logger.Info("All consumers have finished")
 		close(errChan)
 	}()
+
 	for err := range errChan {
 		if err != nil {
 			logger.Error("Consumer error received", err)
