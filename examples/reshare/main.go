@@ -11,9 +11,9 @@ import (
 	"github.com/fystack/mpcium/pkg/config"
 	"github.com/fystack/mpcium/pkg/event"
 	"github.com/fystack/mpcium/pkg/logger"
+	"github.com/fystack/mpcium/pkg/messaging"
 	"github.com/fystack/mpcium/pkg/types"
 	"github.com/google/uuid"
-	"github.com/nats-io/nats.go"
 	"github.com/spf13/viper"
 )
 
@@ -45,8 +45,8 @@ func main() {
 			nil,
 		)
 	}
-	natsURL := viper.GetString("nats.url")
-	natsConn, err := nats.Connect(natsURL)
+	appConfig := config.LoadConfig()
+	natsConn, err := messaging.GetNATSConnection(environment, appConfig.NATs)
 	if err != nil {
 		logger.Fatal("Failed to connect to NATS", err)
 	}

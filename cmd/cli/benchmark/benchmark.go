@@ -13,10 +13,9 @@ import (
 	"github.com/fystack/mpcium/cmd/cli/utils"
 	"github.com/fystack/mpcium/pkg/client"
 	"github.com/fystack/mpcium/pkg/config"
-	"github.com/fystack/mpcium/pkg/constant"
 	"github.com/fystack/mpcium/pkg/logger"
+	"github.com/fystack/mpcium/pkg/messaging"
 	"github.com/fystack/mpcium/pkg/types"
-	"github.com/nats-io/nats.go"
 	"github.com/spf13/cobra"
 )
 
@@ -61,8 +60,8 @@ func createMPCClient() (client.MPCClient, error) {
 	// Initialize logger
 	logger.Init(environment, debug)
 
-	// Create NATS connection using the same logic as main mpcium
-	nc, err := getNATSConnection(environment, appConfig)
+	// Create NATS connection
+	conn, err := messaging.GetNATSConnection(environment, appConfig.NATs)
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to NATS: %w", err)
 	}
@@ -89,7 +88,7 @@ func createMPCClient() (client.MPCClient, error) {
 	}
 
 	opts := client.Options{
-		NatsConn: nc,
+		NatsConn: conn,
 		Signer:   signer,
 	}
 	return client.NewMPCClient(opts), nil
@@ -107,53 +106,6 @@ func generateUniqueID(prefix string) string {
 
 	// Combine timestamp, process ID, and random bytes
 	return fmt.Sprintf("%s-%d-%d-%s", prefix, time.Now().UnixNano(), os.Getpid(), randomHex)
-}
-
-// getNATSConnection creates a NATS connection with proper TLS configuration
-func getNATSConnection(environment string, appConfig *config.AppConfig) (*nats.Conn, error) {
-	url := appConfig.NATs.URL
-	opts := []nats.Option{
-		nats.MaxReconnects(-1), // retry forever
-		nats.ReconnectWait(2 * time.Second),
-		nats.DisconnectHandler(func(nc *nats.Conn) {
-			logger.Warn("Disconnected from NATS")
-		}),
-		nats.ReconnectHandler(func(nc *nats.Conn) {
-			logger.Info("Reconnected to NATS", "url", nc.ConnectedUrl())
-		}),
-		nats.ClosedHandler(func(nc *nats.Conn) {
-			logger.Info("NATS connection closed!")
-		}),
-	}
-
-	if environment == constant.EnvProduction {
-		// Load TLS config from configuration
-		var clientCert, clientKey, caCert string
-		if appConfig.NATs.TLS != nil {
-			clientCert = appConfig.NATs.TLS.ClientCert
-			clientKey = appConfig.NATs.TLS.ClientKey
-			caCert = appConfig.NATs.TLS.CACert
-		}
-
-		// Fallback to default paths if not configured
-		if clientCert == "" {
-			clientCert = filepath.Join(".", "certs", "client-cert.pem")
-		}
-		if clientKey == "" {
-			clientKey = filepath.Join(".", "certs", "client-key.pem")
-		}
-		if caCert == "" {
-			caCert = filepath.Join(".", "certs", "rootCA.pem")
-		}
-
-		opts = append(opts,
-			nats.ClientCert(clientCert, clientKey),
-			nats.RootCAs(caCert),
-			nats.UserInfo(appConfig.NATs.Username, appConfig.NATs.Password),
-		)
-	}
-
-	return nats.Connect(url, opts...)
 }
 
 func parseNumOps(numOps string) (int, error) {
