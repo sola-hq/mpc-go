@@ -1,7 +1,6 @@
-package main
+package peers
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -11,36 +10,54 @@ import (
 	"github.com/fystack/mpcium/pkg/infra"
 	"github.com/fystack/mpcium/pkg/logger"
 	"github.com/hashicorp/consul/api"
-	"github.com/urfave/cli/v3"
+	"github.com/spf13/cobra"
 )
 
-func registerPeers(ctx context.Context, c *cli.Command) error {
-	inputPath := c.String("peers")
-	environment := c.String("environment")
+var (
+	registerPeersPath   string
+	registerEnvironment string
+)
 
+// newRegisterPeersCmd creates a new register peers command
+func newRegisterPeersCmd() *cobra.Command {
+	var cmd = &cobra.Command{
+		Use:   "register",
+		Short: "Register peers from a JSON file to Consul",
+		Long:  "Register peers from a JSON file to Consul service discovery",
+		RunE:  registerPeers,
+	}
+
+	// Add flags
+	cmd.Flags().StringVarP(&registerPeersPath, "peers", "p", "peers.json", "Path to peers.json file (defaults to ./peers.json)")
+	cmd.Flags().StringVarP(&registerEnvironment, "environment", "e", os.Getenv("ENVIRONMENT"), "Environment (development, production, etc.)")
+
+	return cmd
+}
+
+func registerPeers(cmd *cobra.Command, args []string) error {
 	// If no peers path specified, check for peers.json in current directory
-	if inputPath == "" {
-		inputPath = "peers.json"
+	if registerPeersPath == "" {
+		registerPeersPath = "peers.json"
 	}
 
 	// Hardcoded prefix for MPC peers in Consul
 	prefix := "mpc_peers/"
 
 	// Validate the input file path for security
-	if err := pathutil.ValidateFilePath(inputPath); err != nil {
+	if err := pathutil.ValidateFilePath(registerPeersPath); err != nil {
 		return fmt.Errorf("invalid input file path: %w", err)
 	}
 
 	// Check if input file exists
-	if _, err := os.Stat(inputPath); os.IsNotExist(err) {
-		if inputPath == "peers.json" {
+	if _, err := os.Stat(registerPeersPath); os.IsNotExist(err) {
+		if registerPeersPath == "peers.json" {
 			return fmt.Errorf("peers.json not found in current directory. Please specify the path using --peers flag or create peers.json in the current directory")
 		}
-		return fmt.Errorf("input file %s does not exist", inputPath)
+		return fmt.Errorf("input file %s does not exist", registerPeersPath)
 	}
 
 	// Read peers JSON file
-	data, err := os.ReadFile(inputPath)
+	data, err := os.ReadFile(registerPeersPath)
 	if err != nil {
 		return fmt.Errorf("failed to read JSON file: %w", err)
 	}
@@ -56,11 +73,12 @@ func registerPeers(ctx context.Context, c *cli.Command) error {
 	}
 
 	// Initialize config and logger
-	config.InitViperConfig(c.String("config"))
-	logger.Init(environment, true)
+	// Note: configFile is not available in this package, using empty string for default
+	config.InitViperConfig("")
+	logger.Init(registerEnvironment, true)
 
 	// Connect to Consul
-	client := infra.GetConsulClient(environment)
+	client := infra.GetConsulClient(registerEnvironment)
 	kv := client.KV()
 
 	// Register peers in Consul

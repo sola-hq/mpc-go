@@ -1,40 +1,40 @@
 package main
 
 import (
-	"context"
 	"fmt"
-	"log"
 	"os"
 	"syscall"
 
 	"github.com/dgraph-io/badger/v4"
 	"github.com/dgraph-io/badger/v4/options"
-	"github.com/urfave/cli/v3"
+	"github.com/spf13/cobra"
 	"golang.org/x/term"
 )
 
-func main() {
-	app := &cli.Command{
-		Name:  "print-keys",
-		Usage: "Print all keys from a BadgerDB database",
-		Flags: []cli.Flag{
-			&cli.StringFlag{
-				Name:     "db-path",
-				Aliases:  []string{"p"},
-				Usage:    "Path to the BadgerDB database directory",
-				Required: true,
-			},
-		},
-		Action: printKeys,
-	}
+var (
+	dbPath string
+)
 
-	if err := app.Run(context.Background(), os.Args); err != nil {
-		log.Fatal(err)
+var rootCmd = &cobra.Command{
+	Use:   "print-keys",
+	Short: "Print all keys from a BadgerDB database",
+	Long:  "Print all keys from a BadgerDB database",
+	RunE:  printKeys,
+}
+
+func init() {
+	rootCmd.Flags().StringVarP(&dbPath, "db-path", "p", "", "Path to the BadgerDB database directory (required)")
+	rootCmd.MarkFlagRequired("db-path")
+}
+
+func main() {
+	if err := rootCmd.Execute(); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
 	}
 }
 
-func printKeys(ctx context.Context, cmd *cli.Command) error {
-	dbPath := cmd.String("db-path")
+func printKeys(cmd *cobra.Command, args []string) error {
 
 	// Prompt for password
 	fmt.Print("Enter database password: ")

@@ -1,22 +1,56 @@
-package main
+package recovery
 
 import (
-	"context"
 	"fmt"
 	"os"
 	"syscall"
 
 	"github.com/fystack/mpcium/pkg/kvstore"
-	"github.com/urfave/cli/v3"
+	"github.com/spf13/cobra"
 	"golang.org/x/term"
 )
 
-// recoverDatabase handles the database recovery from encrypted backup files
-func recoverDatabase(ctx context.Context, c *cli.Command) error {
-	backupDir := c.String("backup-dir")
-	recoveryPath := c.String("recovery-path")
-	force := c.Bool("force")
+// NewRecoveryCmd creates a new recovery command group
+func NewRecoveryCmd() *cobra.Command {
+	var cmd = &cobra.Command{
+		Use:   "recovery",
+		Short: "Recovery commands",
+		Long:  "Commands for database recovery and backup operations",
+	}
 
+	// Add subcommands
+	cmd.AddCommand(newRecoverCmd())
+
+	return cmd
+}
+
+var (
+	backupDir    string
+	recoveryPath string
+	force        bool
+)
+
+// newRecoverCmd creates a new recover command
+func newRecoverCmd() *cobra.Command {
+	var cmd = &cobra.Command{
+		Use:   "recover",
+		Short: "Recover database from encrypted backup files",
+		Long:  "Recover database from encrypted backup files",
+		RunE:  recoverDatabase,
+	}
+
+	// Add flags
+	cmd.Flags().StringVarP(&backupDir, "backup-dir", "b", "", "Directory containing encrypted backup files (required)")
+	cmd.Flags().StringVarP(&recoveryPath, "recovery-path", "r", "", "Target path for database recovery (required)")
+	cmd.Flags().BoolVarP(&force, "force", "f", false, "Force overwrite if recovery path already exists")
+	cmd.MarkFlagRequired("backup-dir")
+	cmd.MarkFlagRequired("recovery-path")
+
+	return cmd
+}
+
+// recoverDatabase handles the database recovery from encrypted backup files
+func recoverDatabase(cmd *cobra.Command, args []string) error {
 	if _, err := os.Stat(backupDir); os.IsNotExist(err) {
 		return fmt.Errorf("backup directory does not exist: %s", backupDir)
 	}

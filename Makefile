@@ -1,4 +1,4 @@
-.PHONY: all build clean mpcium mpc install test test-verbose test-coverage e2e-test e2e-clean cleanup-test-env
+.PHONY: all build clean mpc-node mpc-cli install test test-verbose test-coverage e2e-test e2e-clean cleanup-test-env
 
 BIN_DIR := bin
 
@@ -6,25 +6,25 @@ BIN_DIR := bin
 all: build
 
 # Build both binaries
-build: mpcium mpc
+build: mpc-node mpc-cli
 
-# Install mpcium (builds and places it in $GOBIN or $GOPATH/bin)
-mpcium:
-	go install ./cmd/mpcium
+# Install mpc-node (builds and places it in $GOBIN or $GOPATH/bin)
+mpc-node:
+	go install ./cmd/node
 
-# Install mpcium-cli
-mpc:
-	go install ./cmd/mpcium-cli
+# Install mpc-cli
+mpc-cli:
+	go install ./cmd/cli
 
 # Install binaries to /usr/local/bin (auto-detects architecture)
 install:
-	@echo "Building and installing mpcium binaries for Linux..."
-	GOOS=linux go build -o /tmp/mpcium ./cmd/mpcium
-	GOOS=linux go build -o /tmp/mpcium-cli ./cmd/mpcium-cli
-	sudo install -m 755 /tmp/mpcium /usr/local/bin/
-	sudo install -m 755 /tmp/mpcium-cli /usr/local/bin/
-	rm -f /tmp/mpcium /tmp/mpcium-cli
-	@echo "Successfully installed mpcium and mpcium-cli to /usr/local/bin/"
+	@echo "Building and installing mpc-node and mpc-cli binaries for current system..."
+	go build -o /tmp/mpc-node ./cmd/node
+	go build -o /tmp/mpc-cli ./cmd/cli
+	sudo install -m 755 /tmp/mpc-node /usr/local/bin/
+	sudo install -m 755 /tmp/mpc-cli /usr/local/bin/
+	rm -f /tmp/mpc-node /tmp/mpc-cli
+	@echo "Successfully installed mpc-node and mpc-cli to /usr/local/bin/"
 
 # Run all tests
 test:

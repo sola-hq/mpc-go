@@ -1,27 +1,44 @@
-package main
+package peers
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
 
 	"github.com/google/uuid"
-	"github.com/urfave/cli/v3"
+	"github.com/spf13/cobra"
 )
 
-const (
-	peersFileName = "peers.json"
-)
+// newGeneratePeersCmd creates a new generate peers command
+func newGeneratePeersCmd() *cobra.Command {
+	// 文件内私有变量
+	var (
+		generateNodes      int
+		generateOutputPath string
+	)
 
-func generatePeers(ctx context.Context, c *cli.Command) error {
-	numNodes := c.Int("number")
-	if numNodes < 1 {
-		return fmt.Errorf("number of nodes must be at least 1")
+	var cmd = &cobra.Command{
+		Use:   "generate",
+		Short: "Generate a new peers.json file",
+		Long:  "Generate a new peers.json file with the specified number of nodes",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return generatePeers(generateNodes, generateOutputPath)
+		},
 	}
 
-	outputPath := c.String("output")
+	// Add flags
+	cmd.Flags().IntVarP(&generateNodes, "number", "n", 0, "Number of nodes to generate (required)")
+	cmd.Flags().StringVarP(&generateOutputPath, "output", "o", PEERS_FILE_NAME, "Output file path")
+	cmd.MarkFlagRequired("number")
+
+	return cmd
+}
+
+func generatePeers(numberOfNodes int, outputPath string) error {
+	if numberOfNodes < 1 {
+		return fmt.Errorf("number of nodes must be at least 1")
+	}
 
 	// Check if file already exists
 	if _, err := os.Stat(outputPath); err == nil {
@@ -40,7 +57,7 @@ func generatePeers(ctx context.Context, c *cli.Command) error {
 
 	// Generate peers data
 	peers := make(map[string]string)
-	for i := 0; i < numNodes; i++ {
+	for i := 0; i < numberOfNodes; i++ {
 		nodeName := fmt.Sprintf("node%d", i)
 		id, err := uuid.NewRandom()
 		if err != nil {
@@ -60,6 +77,6 @@ func generatePeers(ctx context.Context, c *cli.Command) error {
 		return fmt.Errorf("failed to write file: %w", err)
 	}
 
-	fmt.Printf("Successfully generated peers file at %s with %d nodes\n", outputPath, numNodes)
+	fmt.Printf("Successfully generated peers file at %s with %d nodes\n", outputPath, numberOfNodes)
 	return nil
 }

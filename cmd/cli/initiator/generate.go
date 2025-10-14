@@ -1,7 +1,6 @@
-package main
+package initiator
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -12,13 +11,41 @@ import (
 	"time"
 
 	"filippo.io/age"
+	"github.com/fystack/mpcium/cmd/cli/utils"
 	"github.com/fystack/mpcium/pkg/common/pathutil"
 	"github.com/fystack/mpcium/pkg/encryption"
 	"github.com/fystack/mpcium/pkg/types"
-	"github.com/urfave/cli/v3"
+	"github.com/spf13/cobra"
 )
 
-// Identity struct to store node metadata
+var (
+	nodeName  string
+	outputDir string
+	encrypt   bool
+	overwrite bool
+	algorithm string
+)
+
+// NewGenerateInitiatorCmd creates a new generate initiator command
+func NewGenerateInitiatorCmd() *cobra.Command {
+	var cmd = &cobra.Command{
+		Use:   "generate",
+		Short: "Generate initiator identity files",
+		Long:  "Generate initiator identity files",
+		RunE:  runGenerateInitiatorIdentity,
+	}
+
+	// Add flags
+	cmd.Flags().StringVarP(&nodeName, "node-name", "n", "event_initiator", "Name for the initiator node")
+	cmd.Flags().StringVarP(&outputDir, "output-dir", "o", ".", "Output directory for identity files")
+	cmd.Flags().BoolVarP(&encrypt, "encrypt", "e", false, "Encrypt private key with Age (recommended for production)")
+	cmd.Flags().BoolVarP(&overwrite, "overwrite", "f", false, "Overwrite identity files if they already exist")
+	cmd.Flags().StringVarP(&algorithm, "algorithm", "a", "ed25519", "Algorithm to use for key generation (ed25519,p256)")
+
+	return cmd
+}
+
+// InitiatorIdentity struct to store node metadata
 type InitiatorIdentity struct {
 	NodeName    string `json:"node_name"`
 	Algorithm   string `json:"algorithm,omitempty"`
@@ -29,12 +56,11 @@ type InitiatorIdentity struct {
 	MachineName string `json:"machine_name"`
 }
 
-func generateInitiatorIdentity(ctx context.Context, c *cli.Command) error {
-	nodeName := c.String("node-name")
-	outputDir := c.String("output-dir")
-	encrypt := c.Bool("encrypt")
-	overwrite := c.Bool("overwrite")
-	algorithm := c.String("algorithm")
+func runGenerateInitiatorIdentity(cmd *cobra.Command, args []string) error {
+	nodeName := nodeName
+	outputDir := outputDir
+	encrypt := encrypt
+	overwrite := overwrite
 
 	if algorithm == "" {
 		algorithm = string(types.EventInitiatorKeyTypeEd25519)
@@ -132,8 +158,8 @@ func generateInitiatorIdentity(ctx context.Context, c *cli.Command) error {
 
 	// Handle private key (with optional encryption)
 	if encrypt {
-		// Use requestPassword function instead of inline password handling
-		passphrase, err := requestPassword()
+		// Use utils.RequestPassword function instead of inline password handling
+		passphrase, err := utils.RequestPassword()
 		if err != nil {
 			return err
 		}

@@ -1,4 +1,4 @@
-package main
+package identity
 
 import (
 	"context"
@@ -9,14 +9,42 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"syscall"
 	"time"
 
 	"filippo.io/age"
+	"github.com/fystack/mpcium/cmd/cli/utils"
 	"github.com/fystack/mpcium/pkg/common/pathutil"
-	"github.com/urfave/cli/v3"
-	"golang.org/x/term"
+	"github.com/spf13/cobra"
 )
+
+var (
+	identityNodeName  string
+	identityPeersPath string
+	identityDir       string
+	encryptKey        bool
+	overwrite         bool
+)
+
+// NewGenerateIdentityCmd creates a new generate identity command
+func NewGenerateIdentityCmd(ctx context.Context) *cobra.Command {
+	// Create generate command
+	var cmd = &cobra.Command{
+		Use:   "generate",
+		Short: "Generate identity files with optional Age-encrypted private keys for a node",
+		Long:  "Generate identity files with optional Age-encrypted private keys for a node",
+		RunE:  runGenerateIdentity,
+	}
+
+	// Add flags to generate command
+	cmd.Flags().StringVarP(&identityNodeName, "node", "n", "", "Node name (e.g., node0) (required)")
+	cmd.Flags().StringVarP(&identityPeersPath, "peers", "p", "peers.json", "Path to peers.json file")
+	cmd.Flags().StringVarP(&identityDir, "output-dir", "o", "identity", "Output directory for identity files")
+	cmd.Flags().BoolVarP(&encryptKey, "encrypt", "e", false, "Encrypt private key with Age (recommended for production)")
+	cmd.Flags().BoolVarP(&overwrite, "overwrite", "f", false, "Overwrite identity files if they already exist")
+	cmd.MarkFlagRequired("node")
+
+	return cmd
+}
 
 // Identity structure (for identity.json)
 type Identity struct {
@@ -26,57 +54,14 @@ type Identity struct {
 	CreatedAt string `json:"created_at"`
 }
 
-// requestPassword prompts for password, confirms it, validates strength, and reminds to back it up
-func requestPassword() (string, error) {
-	// Warn user about password backup
-	fmt.Println("IMPORTANT: Please ensure you back up your password securely.")
-	fmt.Println("If lost, you won't be able to recover your private key.")
-
-	// First password entry
-	fmt.Print("Enter passphrase to encrypt private key: ")
-	bytePassword, err := term.ReadPassword(int(syscall.Stdin))
-	fmt.Println() // newline after prompt
-	if err != nil {
-		return "", fmt.Errorf("failed to read passphrase: %w", err)
-	}
-	passphrase := string(bytePassword)
-
-	// Confirm password
-	fmt.Print("Confirm passphrase: ")
-	byteConfirmation, err := term.ReadPassword(int(syscall.Stdin))
-	fmt.Println() // newline after prompt
-	if err != nil {
-		return "", fmt.Errorf("failed to read confirmation passphrase: %w", err)
-	}
-	confirmation := string(byteConfirmation)
-
-	// Check if passwords match
-	if passphrase != confirmation {
-		return "", fmt.Errorf("passphrases do not match")
-	}
-
-	// Validate password strength
-	if len(passphrase) < 12 {
-		return "", fmt.Errorf("passphrase too short (minimum 12 characters recommended)")
-	}
-	if !ContainsAtLeastNSpecial(passphrase, 1) {
-		return "", fmt.Errorf("passphrase must contain at least 2 special characters")
-	}
-
-	return passphrase, nil
-}
-
-func generateIdentity(ctx context.Context, c *cli.Command) error {
-	nodeName := c.String("node")
-	peersPath := c.String("peers")
-	identityDir := c.String("output-dir")
-	encryptKey := c.Bool("encrypt")
-	overwrite := c.Bool("overwrite")
+func runGenerateIdentity(cmd *cobra.Command, args []string) error {
+	nodeName := identityNodeName
+	peersPath := identityPeersPath
 
 	var passphrase string
 	if encryptKey {
 		var err error
-		passphrase, err = requestPassword()
+		passphrase, err = utils.RequestPassword()
 		if err != nil {
 			return err
 		}

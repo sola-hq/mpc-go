@@ -3,10 +3,14 @@ package main
 import (
 	"context"
 	"fmt"
-	"log"
 	"os"
 
-	"github.com/urfave/cli/v3"
+	"github.com/fystack/mpcium/cmd/cli/benchmark"
+	"github.com/fystack/mpcium/cmd/cli/identity"
+	"github.com/fystack/mpcium/cmd/cli/initiator"
+	"github.com/fystack/mpcium/cmd/cli/peers"
+	"github.com/fystack/mpcium/cmd/cli/recovery"
+	"github.com/spf13/cobra"
 )
 
 const (
@@ -14,168 +18,45 @@ const (
 	VERSION = "0.2.1"
 )
 
-func main() {
-	cmd := &cli.Command{
-		Name:  "mpcium",
-		Usage: "Fystack MPC node management tools",
-		Flags: []cli.Flag{
-			&cli.StringFlag{
-				Name:    "config",
-				Aliases: []string{"c"},
-				Usage:   "Path to configuration file",
-			},
-		},
-		Commands: []*cli.Command{
-			benchmarkCommand(),
-			{
-				Name:   "generate-peers",
-				Usage:  "Generate a new peers.json file",
-				Action: generatePeers,
-				Flags: []cli.Flag{
-					&cli.IntFlag{
-						Name:     "number",
-						Aliases:  []string{"n"},
-						Usage:    "Number of nodes to generate",
-						Required: true,
-					},
-					&cli.StringFlag{
-						Name:    "output",
-						Aliases: []string{"o"},
-						Usage:   "Output file path",
-						Value:   peersFileName,
-					},
-				},
-			},
-			{
-				Name:   "register-peers",
-				Usage:  "Register peers from a JSON file to Consul",
-				Action: registerPeers,
-				Flags: []cli.Flag{
-					&cli.StringFlag{
-						Name:     "peers",
-						Aliases:  []string{"p"},
-						Usage:    "Path to peers.json file (defaults to ./peers.json)",
-						Required: false,
-					},
-					&cli.StringFlag{
-						Name:    "environment",
-						Aliases: []string{"e"},
-						Usage:   "Environment (development, production, etc.)",
-						Value:   os.Getenv("ENVIRONMENT"),
-					},
-				},
-			},
-			{
-				Name:  "generate-identity",
-				Usage: "Generate identity files with optional Age-encrypted private keys for a node",
-				Flags: []cli.Flag{
-					&cli.StringFlag{
-						Name:     "node",
-						Aliases:  []string{"n"},
-						Usage:    "Node name (e.g., node0)",
-						Required: true,
-					},
-					&cli.StringFlag{
-						Name:    "peers",
-						Aliases: []string{"p"},
-						Value:   peersFileName,
-						Usage:   "Path to peers.json file",
-					},
-					&cli.StringFlag{
-						Name:    "output-dir",
-						Aliases: []string{"o"},
-						Value:   "identity",
-						Usage:   "Output directory for identity files",
-					},
-					&cli.BoolFlag{
-						Name:    "encrypt",
-						Aliases: []string{"e"},
-						Value:   false,
-						Usage:   "Encrypt private key with Age (recommended for production)",
-					},
-					&cli.BoolFlag{
-						Name:    "overwrite",
-						Aliases: []string{"f"},
-						Value:   false,
-						Usage:   "Overwrite identity files if they already exist",
-					},
-				},
-				Action: generateIdentity,
-			},
-			{
-				Name:  "generate-initiator",
-				Usage: "Generate identity files for an event initiator node",
-				Flags: []cli.Flag{
-					&cli.StringFlag{
-						Name:    "node-name",
-						Aliases: []string{"n"},
-						Value:   "event_initiator",
-						Usage:   "Name for the initiator node",
-					},
-					&cli.StringFlag{
-						Name:    "output-dir",
-						Aliases: []string{"o"},
-						Value:   ".",
-						Usage:   "Output directory for identity files",
-					},
-					&cli.BoolFlag{
-						Name:    "encrypt",
-						Aliases: []string{"e"},
-						Value:   false,
-						Usage:   "Encrypt private key with Age (recommended for production)",
-					},
-					&cli.BoolFlag{
-						Name:    "overwrite",
-						Aliases: []string{"f"},
-						Value:   false,
-						Usage:   "Overwrite identity files if they already exist",
-					},
-					&cli.StringFlag{
-						Name:    "algorithm",
-						Aliases: []string{"a"},
-						Value:   "ed25519",
-						Usage:   "Algorithm to use for key generation (ed25519,p256)",
-					},
-				},
-				Action: generateInitiatorIdentity,
-			},
-			{
-				Name:  "recover",
-				Usage: "Recover database from encrypted backup files",
-				Flags: []cli.Flag{
-					&cli.StringFlag{
-						Name:     "backup-dir",
-						Aliases:  []string{"b"},
-						Usage:    "Directory containing encrypted backup files",
-						Required: true,
-					},
-					&cli.StringFlag{
-						Name:     "recovery-path",
-						Aliases:  []string{"r"},
-						Usage:    "Target path for database recovery",
-						Required: true,
-					},
-					&cli.BoolFlag{
-						Name:    "force",
-						Aliases: []string{"f"},
-						Value:   false,
-						Usage:   "Force overwrite if recovery path already exists",
-					},
-				},
-				Action: recoverDatabase,
-			},
-			{
-				Name:  "version",
-				Usage: "Display detailed version information",
-				Action: func(ctx context.Context, c *cli.Command) error {
-					fmt.Printf("mpcium-cli version %s\n", VERSION)
-					return nil
-				},
-			},
-		},
-	}
+var (
+	configFile string
+)
 
-	if err := cmd.Run(context.Background(), os.Args); err != nil {
-		log.Fatal(err)
+func main() {
+	ctx := context.Background()
+
+	// Initialize commands with context
+	rootCmd.AddCommand(peers.NewPeerCmd())
+	rootCmd.AddCommand(identity.NewIdentityCmd(ctx))
+	rootCmd.AddCommand(initiator.NewInitiatorCmd())
+	rootCmd.AddCommand(benchmark.NewBenchmarkCmd())
+	rootCmd.AddCommand(recovery.NewRecoveryCmd())
+	rootCmd.AddCommand(versionCmd)
+
+	if err := rootCmd.Execute(); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
 	}
+}
+
+var rootCmd = &cobra.Command{
+	Use:   "mpc-cli",
+	Short: "MPC CLI",
+	Long:  "MPC CLI for peer, identity, and initiator configuration",
+	PersistentPreRun: func(cmd *cobra.Command, args []string) {
+		// Global configuration can be loaded here if needed
+	},
+}
+
+func init() {
+	rootCmd.PersistentFlags().StringVarP(&configFile, "config", "c", "", "Path to configuration file")
+}
+
+var versionCmd = &cobra.Command{
+	Use:   "version",
+	Short: "Display detailed version information",
+	Long:  "Display detailed version information",
+	Run: func(cmd *cobra.Command, args []string) {
+		fmt.Printf("mpc-cli version %s\n", VERSION)
+	},
 }
