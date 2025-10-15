@@ -158,8 +158,8 @@ jobs:
 
       - name: Build for CodeQL
         run: |
-          go build -v ./cmd/mpcium
-          go build -v ./cmd/mpcium-cli
+          go build -v ./cmd/node
+          go build -v ./cmd/cli
 
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@v3
