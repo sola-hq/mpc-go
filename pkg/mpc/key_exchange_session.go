@@ -34,6 +34,9 @@ type ECDHSession interface {
 	Close() error
 }
 
+var _ ECDHSession = &ecdhSession{}
+
+// ecdhSession is a session for ECDH key exchange
 type ecdhSession struct {
 	nodeID        string
 	peerIDs       []string
@@ -65,7 +68,7 @@ func (e *ecdhSession) RemovePeer(peerID string) {
 }
 
 func (e *ecdhSession) GetReadyPeersCount() int {
-	return e.identityStore.GetSymetricKeyCount()
+	return e.identityStore.GetSymmetricKeyCount()
 }
 
 func (e *ecdhSession) ErrChan() <-chan error {
@@ -113,7 +116,7 @@ func (e *ecdhSession) ListenKeyExchange() error {
 		// Derive symmetric key using HKDF
 		symmetricKey := e.deriveSymmetricKey(sharedSecret, ecdhMsg.From)
 		e.identityStore.SetSymmetricKey(ecdhMsg.From, symmetricKey)
-		logger.Debug("ECDH progress", "peer", ecdhMsg.From, "current", e.identityStore.GetSymetricKeyCount())
+		logger.Debug("ECDH progress", "peer", ecdhMsg.From, "current", e.identityStore.GetSymmetricKeyCount())
 	})
 
 	e.ecdhSub = sub

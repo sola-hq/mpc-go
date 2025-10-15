@@ -72,7 +72,7 @@ func (tc *timeOutConsumer) Run() {
 			}
 
 			err = tc.resultQueue.Enqueue(event.SigningResultTopic, signErrorResultBytes, &messaging.EnqueueOptions{
-				IdempotententKey: signErrorResult.TxID,
+				IdempotentKey: signErrorResult.TxID,
 			})
 			if err != nil {
 				logger.Error("Failed to publish signing result event", err)

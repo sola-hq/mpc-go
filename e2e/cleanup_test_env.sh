@@ -10,8 +10,8 @@ echo "=== MPC Test Environment Cleanup ==="
 kill_mpc_processes() {
     echo "Checking for existing MPC processes..."
     
-    # Find all mpcium processes
-    PIDS=$(pgrep -f "mpcium" || true)
+    # Find all mpc-node processes
+    PIDS=$(pgrep -f "mpc-node" || true)
     
     if [ -z "$PIDS" ]; then
         echo "No existing MPC processes found"

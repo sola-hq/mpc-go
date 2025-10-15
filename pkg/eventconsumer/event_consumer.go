@@ -258,7 +258,7 @@ func (ec *eventConsumer) handleKeyGenEvent(natMsg *nats.Msg) {
 	if err := ec.genKeyResultQueue.Enqueue(
 		key,
 		payload,
-		&messaging.EnqueueOptions{IdempotententKey: composeKeygenIdempotentKey(walletID, natMsg)},
+		&messaging.EnqueueOptions{IdempotentKey: composeKeygenIdempotentKey(walletID, natMsg)},
 	); err != nil {
 		logger.Error("Failed to publish key generation success message", err)
 		ec.handleKeygenSessionError(walletID, err, "Failed to publish key generation success message", natMsg)
@@ -289,7 +289,7 @@ func (ec *eventConsumer) handleKeygenSessionError(walletID string, err error, co
 
 	key := fmt.Sprintf(mpc.TypeGenerateWalletResultFmt, walletID)
 	err = ec.genKeyResultQueue.Enqueue(key, keygenResultBytes, &messaging.EnqueueOptions{
-		IdempotententKey: composeKeygenIdempotentKey(walletID, natMsg),
+		IdempotentKey: composeKeygenIdempotentKey(walletID, natMsg),
 	})
 	if err != nil {
 		logger.Error("Failed to enqueue keygen result event", err,
@@ -536,7 +536,7 @@ func (ec *eventConsumer) handleSigningSessionError(walletID, txID, networkIntern
 		return
 	}
 	err = ec.signingResultQueue.Enqueue(event.SigningResultCompleteTopic, signingResultBytes, &messaging.EnqueueOptions{
-		IdempotententKey: composeSigningIdempotentKey(txID, natMsg),
+		IdempotentKey: composeSigningIdempotentKey(txID, natMsg),
 	})
 	if err != nil {
 		logger.Error("Failed to enqueue signing result event", err,
@@ -721,7 +721,7 @@ func (ec *eventConsumer) consumeReshareEvent() error {
 				key,
 				successBytes,
 				&messaging.EnqueueOptions{
-					IdempotententKey: composeReshareIdempotentKey(msg.SessionID, natMsg),
+					IdempotentKey: composeReshareIdempotentKey(msg.SessionID, natMsg),
 				})
 			if err != nil {
 				logger.Error("Failed to publish reshare success message", err)
@@ -778,7 +778,7 @@ func (ec *eventConsumer) handleReshareSessionError(
 
 	key := fmt.Sprintf(mpc.TypeReshareWalletResultFmt, walletID)
 	err = ec.reshareResultQueue.Enqueue(key, reshareResultBytes, &messaging.EnqueueOptions{
-		IdempotententKey: composeReshareIdempotentKey(walletID, natMsg),
+		IdempotentKey: composeReshareIdempotentKey(walletID, natMsg),
 	})
 	if err != nil {
 		logger.Error("Failed to enqueue reshare result event", err,

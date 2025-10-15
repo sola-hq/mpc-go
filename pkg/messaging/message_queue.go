@@ -22,7 +22,7 @@ type MessageQueue interface {
 }
 
 type EnqueueOptions struct {
-	IdempotententKey string
+	IdempotentKey string
 }
 
 type msgQueue struct {
@@ -104,7 +104,7 @@ func (m *NATsMessageQueueManager) NewMessageQueue(consumerName string) MessageQu
 func (mq *msgQueue) Enqueue(topic string, message []byte, options *EnqueueOptions) error {
 	header := nats.Header{}
 	if options != nil {
-		header.Add("Nats-Msg-Id", options.IdempotententKey)
+		header.Add("Nats-Msg-Id", options.IdempotentKey)
 	}
 
 	logger.Info("Publishing message", "topic", topic, "consumerName", mq.consumerName)

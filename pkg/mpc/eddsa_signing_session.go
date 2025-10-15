@@ -169,7 +169,7 @@ func (s *eddsaSigningSession) Sign(onSuccess func(data []byte)) {
 			}
 
 			err = s.resultQueue.Enqueue(event.SigningResultCompleteTopic, bytes, &messaging.EnqueueOptions{
-				IdempotententKey: s.idempotentKey,
+				IdempotentKey: s.idempotentKey,
 			})
 			if err != nil {
 				s.ErrCh <- errors.Wrap(err, "Failed to publish sign success message")

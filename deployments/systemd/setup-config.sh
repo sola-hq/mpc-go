@@ -6,8 +6,8 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-MPCIUM_HOME="/opt/mpcium"
-SERVICE_NAME="mpcium"
+MPC_HOME="/opt/mpc"
+SERVICE_NAME="mpc"
 
 # Colors for output
 RED='\033[0;31m'
@@ -110,16 +110,16 @@ check_root() {
 }
 
 
-# Prompt for MPCIUM_NODE_NAME if not provided
+# Prompt for MPC_NODE_NAME if not provided
 setup_node_name() {
     log_step "Setting up node name..."
     
     local node_name=""
-    prompt_input "Enter MPCIUM_NODE_NAME:" "node_name" "Examples: node0, node1, node2, node3,.."
+    prompt_input "Enter MPC_NODE_NAME:" "node_name" "Examples: node0, node1, node2, node3,.."
     
     # Store the node name for later use
-    MPCIUM_NODE_NAME="$node_name"
-    log_info "Node name set to: $MPCIUM_NODE_NAME"
+    MPC_NODE_NAME="$node_name"
+    log_info "Node name set to: $MPC_NODE_NAME"
 }
 
 # Check for installed binaries in /usr/local/bin
@@ -127,7 +127,7 @@ check_binaries() {
     log_step "Checking for installed binaries in /usr/local/bin..."
     
     # Check if binaries are installed in /usr/local/bin
-    if [[ -f "/usr/local/bin/mpcium" ]] && [[ -f "/usr/local/bin/mpcium-cli" ]]; then
+    if [[ -f "/usr/local/bin/mpc" ]] && [[ -f "/usr/local/bin/mpc-cli" ]]; then
         log_info "Found installed binaries in /usr/local/bin"
         return 0
     fi
@@ -142,29 +142,29 @@ ensure_configuration() {
     
     # Create directory structure
     log_info "Creating directory structure..."
-    mkdir -p "$MPCIUM_HOME"
-    mkdir -p "/etc/mpcium"
+    mkdir -p "$MPC_HOME"
+    mkdir -p "/etc/mpc"
     
     # Note: Binaries are expected to be installed in /usr/local/bin via 'go install'
     
     # Check for configuration file - require user to create it first
-    if [[ -f "/etc/mpcium/config.yaml" ]]; then
-        log_info "Config file found at /etc/mpcium/config.yaml"
+    if [[ -f "/etc/mpc/config.yaml" ]]; then
+        log_info "Config file found at /etc/mpc/config.yaml"
     else
-        log_error "Config file not found at /etc/mpcium/config.yaml"
+        log_error "Config file not found at /etc/mpc/config.yaml"
         log_error "Please create the config file before running this script:"
-        if [[ "$MPCIUM_ENVIRONMENT" == "development" ]]; then
-            log_error "  1. Copy the template: sudo cp config.yaml.template /etc/mpcium/config.yaml"
+        if [[ "$MPC_ENVIRONMENT" == "development" ]]; then
+            log_error "  1. Copy the template: sudo cp config.yaml.template /etc/mpc/config.yaml"
         else
-            log_error "  1. Copy the template: sudo cp config.prod.yaml.template /etc/mpcium/config.yaml"
+            log_error "  1. Copy the template: sudo cp config.prod.yaml.template /etc/mpc/config.yaml"
         fi
-        log_error "  2. Edit the configuration: sudo vim /etc/mpcium/config.yaml"
+        log_error "  2. Edit the configuration: sudo vim /etc/mpc/config.yaml"
         log_error "  3. Run this script again"
         exit 1
     fi
     
-    # Set proper ownership and permissions for /etc/mpcium directory and config file
-    # Note: This will be called after create_user() so mpcium group will exist
+    # Set proper ownership and permissions for /etc/mpc directory and config file
+    # Note: This will be called after create_user() so mpc group will exist
     
     log_info "Configuration validation complete"
 }
@@ -173,43 +173,43 @@ ensure_configuration() {
 create_user() {
     log_step "Creating system user..."
     
-    if ! id "mpcium" &>/dev/null; then
-        useradd -r -s /bin/false -d "$MPCIUM_HOME" -c "Mpcium MPC Node" mpcium
-        log_info "Created mpcium user and group"
+    if ! id "mpc" &>/dev/null; then
+        useradd -r -s /bin/false -d "$MPC_HOME" -c "Mpcium MPC Node" mpc
+        log_info "Created mpc user and group"
     else
-        log_info "User mpcium already exists"
+        log_info "User mpc already exists"
     fi
     
     # Ensure group exists (in case user was created differently)
-    if ! getent group mpcium >/dev/null; then
-        groupadd -r mpcium
-        usermod -g mpcium mpcium
-        log_info "Created mpcium group and added user to it"
+    if ! getent group mpc >/dev/null; then
+        groupadd -r mpc
+        usermod -g mpc mpc
+        log_info "Created mpc group and added user to it"
     fi
     
-    # Set proper ownership for /opt/mpcium
-    chown -R mpcium:mpcium "$MPCIUM_HOME"
-    chmod 750 "$MPCIUM_HOME"
+    # Set proper ownership for /opt/mpc
+    chown -R mpc:mpc "$MPC_HOME"
+    chmod 750 "$MPC_HOME"
     
-    # Set proper ownership and permissions for /etc/mpcium
-    if [[ -d "/etc/mpcium" ]]; then
-        chown root:mpcium "/etc/mpcium"
-        chmod 750 "/etc/mpcium"
-        log_info "/etc/mpcium directory permissions set (root:mpcium 750)"
+    # Set proper ownership and permissions for /etc/mpc
+    if [[ -d "/etc/mpc" ]]; then
+        chown root:mpc "/etc/mpc"
+        chmod 750 "/etc/mpc"
+        log_info "/etc/mpc directory permissions set (root:mpc 750)"
         
         # Set permissions for config file if it exists
-        if [[ -f "/etc/mpcium/config.yaml" ]]; then
-            chown root:mpcium "/etc/mpcium/config.yaml"
-            chmod 640 "/etc/mpcium/config.yaml"
-            log_info "Config file permissions set (root:mpcium 640)"
+        if [[ -f "/etc/mpc/config.yaml" ]]; then
+            chown root:mpc "/etc/mpc/config.yaml"
+            chmod 640 "/etc/mpc/config.yaml"
+            log_info "Config file permissions set (root:mpc 640)"
         fi
     fi
 }
 
 # Check if current node uses encrypted identity
 check_encrypted_identity() {
-    local current_node_name="$MPCIUM_NODE_NAME"
-    local identity_dir="$MPCIUM_HOME/identity"
+    local current_node_name="$MPC_NODE_NAME"
+    local identity_dir="$MPC_HOME/identity"
     local encrypted_key_file="$identity_dir/${current_node_name}_private.key.age"
     local plain_key_file="$identity_dir/${current_node_name}_private.key"
     
@@ -229,10 +229,10 @@ check_encrypted_identity() {
 update_service_credentials() {
     log_step "Updating service credentials..."
     
-    local CRED_FILE="/etc/mpcium/mpcium-db-password.cred"
-    local IDENTITY_CRED_FILE="/etc/mpcium/mpcium-identity-password.cred"
-    local SERVICE_TEMPLATE="$SCRIPT_DIR/mpcium.service"
-    local TARGET_SERVICE="/etc/systemd/system/mpcium.service"
+    local CRED_FILE="/etc/mpc/mpc-db-password.cred"
+    local IDENTITY_CRED_FILE="/etc/mpc/mpc-identity-password.cred"
+    local SERVICE_TEMPLATE="$SCRIPT_DIR/mpc.service"
+    local TARGET_SERVICE="/etc/systemd/system/mpc.service"
 
     if [[ ! -f "$SERVICE_TEMPLATE" ]]; then
         log_error "Service template not found: $SERVICE_TEMPLATE"
@@ -283,23 +283,23 @@ update_service_credentials() {
             # Replace placeholder with raw base64 (no escaping) in the target file
             sed -i "s|IDENTITY_PASSWORD_BASE64_BLOB_DATA|$IDENTITY_CRED_BLOB|g" "$TARGET_SERVICE"
             # Enable identity password flag and decrypt flag in ExecStart
-            sed -i "s|--password-file=%d/mpcium-db-password.cred|--password-file=%d/mpcium-db-password.cred --identity-password-file=%d/mpcium-identity-password.cred --decrypt-private-key|g" "$TARGET_SERVICE"
+            sed -i "s|--password-file=%d/mpc-db-password.cred|--password-file=%d/mpc-db-password.cred --identity-password-file=%d/mpc-identity-password.cred --decrypt-private-key|g" "$TARGET_SERVICE"
 
             unset IDENTITY_CRED_BLOB
             log_info "Identity credential injected successfully"
         else
             log_error "Encrypted identity detected but credential file not found: $IDENTITY_CRED_FILE"
-            log_error "Please run setup-mpcium-cred.sh first to generate identity password credential"
+            log_error "Please run setup-mpc-cred.sh first to generate identity password credential"
             exit 1
         fi
     else
         log_info "Plain text identity detected - removing identity password placeholders"
         # Remove the entire identity password credential line completely
-        sed -i "/SetCredentialEncrypted=mpcium-identity-password.cred:/d" "$TARGET_SERVICE"
+        sed -i "/SetCredentialEncrypted=mpc-identity-password.cred:/d" "$TARGET_SERVICE"
         # Also clean up any remaining placeholder remnants (just in case)
         sed -i "s|IDENTITY_PASSWORD_BASE64_BLOB_DATA||g" "$TARGET_SERVICE"
         # Ensure ExecStart doesn't have the identity password flag or decrypt flag (shouldn't be there anyway, but just in case)
-        sed -i "s| --identity-password-file=%d/mpcium-identity-password.cred --decrypt-private-key||g" "$TARGET_SERVICE"
+        sed -i "s| --identity-password-file=%d/mpc-identity-password.cred --decrypt-private-key||g" "$TARGET_SERVICE"
         log_info "Identity password placeholders and flags removed successfully"
     fi
 
@@ -314,8 +314,8 @@ update_service_credentials() {
 install_systemd_service() {
     log_step "Installing systemd service..."
     
-    if [[ ! -f "$SCRIPT_DIR/mpcium.service" ]]; then
-        log_error "Service file not found: $SCRIPT_DIR/mpcium.service"
+    if [[ ! -f "$SCRIPT_DIR/mpc.service" ]]; then
+        log_error "Service file not found: $SCRIPT_DIR/mpc.service"
         exit 1
     fi
     
@@ -332,7 +332,7 @@ install_systemd_service() {
 check_environment() {
     log_step "Checking environment configuration..."
     
-    local config_file="/etc/mpcium/config.yaml"
+    local config_file="/etc/mpc/config.yaml"
     
     if [[ ! -f "$config_file" ]]; then
         log_error "Config file not found at $config_file - the configuration file doesn't exist yet"
@@ -398,7 +398,7 @@ check_environment() {
 validate_config_credentials() {
     log_step "Validating configuration credentials..."
     
-    local config_file="${1:-/etc/mpcium/config.yaml}"
+    local config_file="${1:-/etc/mpc/config.yaml}"
     local errors=0
     
     if [[ ! -f "$config_file" ]]; then
@@ -517,7 +517,7 @@ validate_config_credentials() {
 setup_environment_file() {
     log_step "Setting up environment file..."
     
-    local env_file="$MPCIUM_HOME/.env"
+    local env_file="$MPC_HOME/.env"
     
     # Check environment configuration and validate production settings
     if ! check_environment; then
@@ -535,12 +535,12 @@ setup_environment_file() {
     cat > "$env_file" << EOF
 # Mpcium Environment Variables
 # Generated on $(date)
-# Note: All credentials are now configured in /etc/mpcium/config.yaml
-MPCIUM_NODE_NAME=${MPCIUM_NODE_NAME}
+# Note: All credentials are now configured in /etc/mpc/config.yaml
+MPC_NODE_NAME=${MPC_NODE_NAME}
 EOF
 
     # Secure the environment file - only root can read/write, service user can read
-    chown root:mpcium "$env_file"
+    chown root:mpc "$env_file"
     chmod 640 "$env_file"
     log_info "Environment file created at: $env_file"
     
@@ -557,8 +557,8 @@ verify_deployment() {
     # Note: backups and db directories are created at runtime
     local required_dirs=("identity")
     for dir in "${required_dirs[@]}"; do
-        if [[ ! -d "$MPCIUM_HOME/$dir" ]]; then
-            log_error "Missing required directory: $MPCIUM_HOME/$dir"
+        if [[ ! -d "$MPC_HOME/$dir" ]]; then
+            log_error "Missing required directory: $MPC_HOME/$dir"
             ((errors++))
         else
             log_info "✓ Directory exists: $dir"
@@ -566,9 +566,9 @@ verify_deployment() {
     done
     
     # Check required files
-    # config.yaml is in /etc/mpcium/, others are in $MPCIUM_HOME
-    if [[ ! -f "/etc/mpcium/config.yaml" ]]; then
-        log_error "Missing required file: /etc/mpcium/config.yaml"
+    # config.yaml is in /etc/mpc/, others are in $MPC_HOME
+    if [[ ! -f "/etc/mpc/config.yaml" ]]; then
+        log_error "Missing required file: /etc/mpc/config.yaml"
         ((errors++))
     else
         log_info "✓ File exists: config.yaml"
@@ -576,8 +576,8 @@ verify_deployment() {
     
     local required_files=(".env" "peers.json")
     for file in "${required_files[@]}"; do
-        if [[ ! -f "$MPCIUM_HOME/$file" ]]; then
-            log_error "Missing required file: $MPCIUM_HOME/$file"
+        if [[ ! -f "$MPC_HOME/$file" ]]; then
+            log_error "Missing required file: $MPC_HOME/$file"
             ((errors++))
         else
             log_info "✓ File exists: $file"
@@ -585,7 +585,7 @@ verify_deployment() {
     done
     
     # Check binaries
-    local required_binaries=("mpcium" "mpcium-cli")
+    local required_binaries=("mpc" "mpc-cli")
     for binary in "${required_binaries[@]}"; do
         if [[ ! -f "/usr/local/bin/$binary" ]] || [[ ! -x "/usr/local/bin/$binary" ]]; then
             log_error "Missing or non-executable binary: /usr/local/bin/$binary"
@@ -596,11 +596,11 @@ verify_deployment() {
     done
     
     # Check peers.json and identity files
-    if [[ -f "$MPCIUM_HOME/peers.json" ]]; then
+    if [[ -f "$MPC_HOME/peers.json" ]]; then
         # Parse peers.json to get node names
         local node_names
         if command -v jq >/dev/null; then
-            node_names=$(jq -r 'keys[]' "$MPCIUM_HOME/peers.json" 2>/dev/null)
+            node_names=$(jq -r 'keys[]' "$MPC_HOME/peers.json" 2>/dev/null)
             if [[ $? -eq 0 ]] && [[ -n "$node_names" ]]; then
                 log_info "Found peer nodes in peers.json:"
                 
@@ -608,7 +608,7 @@ verify_deployment() {
                     log_info "  - Checking identity files for: $node_name"
                     
                     # Check identity JSON file
-                    local identity_file="$MPCIUM_HOME/identity/${node_name}_identity.json"
+                    local identity_file="$MPC_HOME/identity/${node_name}_identity.json"
                     if [[ ! -f "$identity_file" ]]; then
                         log_error "Missing identity file: $identity_file"
                         ((errors++))
@@ -619,14 +619,14 @@ verify_deployment() {
                     # Check private key file only for current node
                     # Other nodes' private keys should NOT be present for security reasons
                     local current_node_name_from_env
-                    if [[ -f "$MPCIUM_HOME/.env" ]]; then
-                        current_node_name_from_env=$(grep "^MPCIUM_NODE_NAME=" "$MPCIUM_HOME/.env" | cut -d'=' -f2 | tr -d '"'"'"' ')
+                    if [[ -f "$MPC_HOME/.env" ]]; then
+                        current_node_name_from_env=$(grep "^MPC_NODE_NAME=" "$MPC_HOME/.env" | cut -d'=' -f2 | tr -d '"'"'"' ')
                     fi
                     
                     if [[ "$node_name" == "$current_node_name_from_env" ]]; then
                         # This is the current node - private key is required
-                        local private_key_plain="$MPCIUM_HOME/identity/${node_name}_private.key"
-                        local private_key_encrypted="$MPCIUM_HOME/identity/${node_name}_private.key.age"
+                        local private_key_plain="$MPC_HOME/identity/${node_name}_private.key"
+                        local private_key_encrypted="$MPC_HOME/identity/${node_name}_private.key.age"
                         
                         if [[ -f "$private_key_plain" ]]; then
                             log_info "    ✓ Private key file exists: ${node_name}_private.key"
@@ -638,8 +638,8 @@ verify_deployment() {
                         fi
                     else
                         # This is a peer node - private key should NOT be present
-                        local private_key_plain="$MPCIUM_HOME/identity/${node_name}_private.key"
-                        local private_key_encrypted="$MPCIUM_HOME/identity/${node_name}_private.key.age"
+                        local private_key_plain="$MPC_HOME/identity/${node_name}_private.key"
+                        local private_key_encrypted="$MPC_HOME/identity/${node_name}_private.key.age"
                         
                         if [[ -f "$private_key_plain" ]] || [[ -f "$private_key_encrypted" ]]; then
                             log_warn "    ⚠ Private key found for peer node $node_name (security risk - should only have current node's private key)"
@@ -657,15 +657,15 @@ verify_deployment() {
     fi
     
     # Check current node's private key based on environment variable
-    if [[ -f "$MPCIUM_HOME/.env" ]]; then
+    if [[ -f "$MPC_HOME/.env" ]]; then
         local current_node_name
-        current_node_name=$(grep "^MPCIUM_NODE_NAME=" "$MPCIUM_HOME/.env" | cut -d'=' -f2 | tr -d '"'"'"' ')
+        current_node_name=$(grep "^MPC_NODE_NAME=" "$MPC_HOME/.env" | cut -d'=' -f2 | tr -d '"'"'"' ')
         
         if [[ -n "$current_node_name" ]]; then
             log_info "Current node from .env: $current_node_name"
             
-            local current_private_key_plain="$MPCIUM_HOME/identity/${current_node_name}_private.key"
-            local current_private_key_encrypted="$MPCIUM_HOME/identity/${current_node_name}_private.key.age"
+            local current_private_key_plain="$MPC_HOME/identity/${current_node_name}_private.key"
+            local current_private_key_encrypted="$MPC_HOME/identity/${current_node_name}_private.key.age"
             
             if [[ -f "$current_private_key_plain" ]]; then
                 log_info "✓ Current node private key exists: ${current_node_name}_private.key"
@@ -676,7 +676,7 @@ verify_deployment() {
                 ((errors++))
             fi
         else
-            log_warn "MPCIUM_NODE_NAME not found in .env file"
+            log_warn "MPC_NODE_NAME not found in .env file"
         fi
     fi
     
@@ -745,7 +745,7 @@ case "${1:-deploy}" in
         while true; do
             echo -e "${BLUE}[PROMPT]${NC} Enter path to config.yaml file to validate:"
             echo -e "  ${YELLOW}Examples:${NC}"
-            echo -e "    /etc/mpcium/config.yaml"
+            echo -e "    /etc/mpc/config.yaml"
             echo -e "    ./config.yaml"
             echo -e "    ./config.prod.yaml.template"
             read -p "> " config_path
@@ -796,7 +796,7 @@ case "${1:-deploy}" in
         echo ""
         echo "Commands:"
         echo "  deploy          Full configuration setup (default)"
-        echo "  validate-only   Validate /etc/mpcium/config.yaml credentials only"
+        echo "  validate-only   Validate /etc/mpc/config.yaml credentials only"
         echo "  validate-config Validate any config file (prompts for path)"
         echo "  update-creds    Update service credentials only"
         echo "  verify          Verify configuration and files"

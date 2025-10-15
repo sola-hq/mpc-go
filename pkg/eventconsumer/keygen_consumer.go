@@ -209,7 +209,7 @@ func (sc *keygenConsumer) handleKeygenError(keygenMsg types.GenerateKeyMessage, 
 
 	topic := fmt.Sprintf(mpc.TypeGenerateWalletResultFmt, keygenResult.WalletID)
 	err = sc.keygenResultQueue.Enqueue(topic, keygenResultBytes, &messaging.EnqueueOptions{
-		IdempotententKey: buildIdempotentKey(keygenMsg.WalletID, sessionID, mpc.TypeGenerateWalletResultFmt),
+		IdempotentKey: buildIdempotentKey(keygenMsg.WalletID, sessionID, mpc.TypeGenerateWalletResultFmt),
 	})
 	if err != nil {
 		logger.Error("Failed to enqueue keygen result event", err,

@@ -1,14 +1,14 @@
-# Mpcium Production Deployment Guide
+# mpc Production Deployment Guide
 
 ⚠️ **PRODUCTION DEPLOYMENT ONLY**
 
-This directory contains deployment scripts and configurations for **production deployment** of Mpcium MPC (Multi-Party Computation) nodes using systemd.
+This directory contains deployment scripts and configurations for **production deployment** of mpc MPC (Multi-Party Computation) nodes using systemd.
 
 **For local development and testing**, please refer to [INSTALLATION.md](../../INSTALLATION.md) instead.
 
 ## Overview
 
-Mpcium is a distributed threshold cryptographic system that requires multiple nodes to collaborate for secure operations. This deployment guide covers setting up a **secure, production-ready** MPC cluster with proper security hardening, systemd integration, and operational best practices.
+mpc is a distributed threshold cryptographic system that requires multiple nodes to collaborate for secure operations. This deployment guide covers setting up a **secure, production-ready** MPC cluster with proper security hardening, systemd integration, and operational best practices.
 
 ## Prerequisites
 
@@ -33,7 +33,7 @@ Follow these steps for manual deployment across your cluster:
 
 #### Step 1: Install Go
 
-Before installing Mpcium, you need Go 1.25+ installed on all nodes.
+Before installing mpc, you need Go 1.25+ installed on all nodes.
 
 **Download Go Binaries with wget:**
 
@@ -102,25 +102,25 @@ go version go1.25.0 linux/arm64
 #### Step 2: Prepare Environment
 
 ```bash
-# Install Mpcium binaries (preserve environment to access Go)
+# Install MPC binaries (preserve environment to access Go)
 sudo -E make install
 
 # Create system user and directories
-sudo useradd -r -s /bin/false -d /opt/mpcium -c "Mpcium MPC Node" mpcium
-sudo mkdir -p /opt/mpcium /etc/mpcium
+sudo useradd -r -s /bin/false -d /opt/mpc -c "MPC Node" mpc
+sudo mkdir -p /opt/mpc /etc/mpc
 ```
 
 #### Step 3: Configure Permissions
 
 ```bash
 # Application data directories (service-owned)
-sudo chown -R mpcium:mpcium /opt/mpcium
-sudo chmod g+s /opt/mpcium
-sudo chmod 750 /opt/mpcium
+sudo chown -R mpc:mpc /opt/mpc
+sudo chmod g+s /opt/mpc
+sudo chmod 750 /opt/mpc
 
 # Configuration directory (root-controlled, service-readable)
-sudo chown root:mpcium /etc/mpcium
-sudo chmod 750 /etc/mpcium
+sudo chown root:mpc /etc/mpc
+sudo chmod 750 /etc/mpc
 ```
 
 #### Step 4: Generate Peer Configuration
@@ -128,21 +128,21 @@ sudo chmod 750 /etc/mpcium
 On **one designated node** only:
 
 ```bash
-cd /opt/mpcium
-mpcium-cli generate-peers -n 3
+cd /opt/mpc
+mpc-cli generate-peers -n 3
 ```
 
 #### Step 5: Copy Config and Update Configuration
 
 ```bash
 # Copy configuration template
-cp ~/mpcium/config.prod.yaml.template /etc/mpcium/config.yaml
+cp ~/mpc/config.prod.yaml.template /etc/mpc/config.yaml
 # Set proper configuration permissions
-sudo chown root:mpcium /etc/mpcium/config.yaml
-sudo chmod 640 /etc/mpcium/config.yaml
+sudo chown root:mpc /etc/mpc/config.yaml
+sudo chmod 640 /etc/mpc/config.yaml
 ```
 
-Edit `/etc/mpcium/config.yaml` to include:
+Edit `/etc/mpc/config.yaml` to include:
 
 - NATS server connection details and credentials
 - Consul service discovery configuration
@@ -154,22 +154,22 @@ Edit `/etc/mpcium/config.yaml` to include:
 On **one designated node** only:
 
 ```bash
-mpcium-cli generate-initiator --encrypt
+mpc-cli generate-initiator --encrypt
 ```
 
 ⚠️ **Important**:
 
 - This creates an encrypted private key file with `.key.age` extension that you'll need to securely distribute to application nodes that initiate MPC operations
-- Copy the public key from `initiator_identity.json` and update the `event_initiator_pubkey` field in `/etc/mpcium/config.yaml` on **all nodes**
+- Copy the public key from `initiator_identity.json` and update the `event_initiator_pubkey` field in `/etc/mpc/config.yaml` on **all nodes**
 
 #### Step 7: Configure Each Node
 
 ```bash
 # Register peers
-mpcium-cli register-peers --config /etc/mpcium/config.yaml --environment production
+mpc-cli peer register --config /etc/mpc/config.yaml --environment production
 
 # Generate node identity (with encryption) - replace node0 with actual node name
-mpcium-cli generate-identity --node node0 --encrypt
+mpc-cli identity generate --node node0 --encrypt
 ```
 
 #### Step 8: Generate TLS Certificates
@@ -177,8 +177,8 @@ mpcium-cli generate-identity --node node0 --encrypt
 #### Step 9: Configure Database Encryption
 
 ```bash
-cd ~/mpcium/deployments
-./setup-mpcium-cred.sh
+cd ~/mpc/deployments
+./setup-mpc-cred.sh
 # Enter BadgerDB password when prompted
 # ⚠️ IMPORTANT: Backup password to secure storage (e.g., Bitwarden)
 ```
@@ -193,10 +193,10 @@ sudo ./setup-config.sh
 
 ```bash
 # Check service status
-sudo systemctl status mpcium
+sudo systemctl status mpc
 
 # Monitor logs
-journalctl -f -u mpcium
+journalctl -f -u mpc
 ```
 
 ## Directory Structure
@@ -204,7 +204,7 @@ journalctl -f -u mpcium
 After deployment, the following directory structure is created:
 
 ```
-/opt/mpcium/           # Application home (mpcium:mpcium, 750)
+/opt/mpc/           # Application home (mpc:mpc, 750)
 ├── certs/             # TLS certificates
 │   ├── client-cert.pem
 │   ├── client-key.pem
@@ -219,31 +219,31 @@ After deployment, the following directory structure is created:
 ├── peers.json         # Peer registry
 └── .env               # Environment variables
 
-/etc/mpcium/           # Configuration (root:mpcium, 750)
-└── config.yaml        # Main configuration (root:mpcium, 640)
+/etc/mpc/           # Configuration (root:mpc, 750)
+└── config.yaml        # Main configuration (root:mpc, 640)
 ```
 
 ### Identity Directory Examples
 
 **Node 0 (unencrypted private key):**
 ```
-/opt/mpcium/identity/
+/opt/mpc/identity/
 ├── node0_identity.json
 ├── node0_private.key      # This node's private key
 ├── node1_identity.json
 └── node2_identity.json
 ```
-*Generated with:* `mpcium-cli generate-identity --node node0 --config /etc/mpcium/config.yaml`
+*Generated with:* `mpc-cli generate-identity --node node0 --config /etc/mpc/config.yaml`
 
 **Node 1 (encrypted private key):**
 ```
-/opt/mpcium/identity/
+/opt/mpc/identity/
 ├── node0_identity.json
 ├── node1_identity.json
 ├── node1_private.key.age  # This node's encrypted private key
 └── node2_identity.json
 ```
-*Generated with:* `mpcium-cli generate-identity --node node1 --config /etc/mpcium/config.yaml --encrypt`
+*Generated with:* `mpc-cli generate-identity --node node1 --config /etc/mpc/config.yaml --encrypt`
 
 ## Security Considerations
 
@@ -263,7 +263,7 @@ After deployment, the following directory structure is created:
 
 The service runs with enhanced security:
 
-- **Non-privileged user** (`mpcium`)
+- **Non-privileged user** (`mpc`)
 - **Read-only** configuration directory
 - **Private temp** directory
 - **System call filtering**
@@ -275,16 +275,16 @@ The service runs with enhanced security:
 
 ```bash
 # Service status
-sudo systemctl status mpcium
+sudo systemctl status mpc
 
 # Start/stop/restart
-sudo systemctl start mpcium
-sudo systemctl stop mpcium
-sudo systemctl restart mpcium
+sudo systemctl start mpc
+sudo systemctl stop mpc
+sudo systemctl restart mpc
 
 # View logs
-journalctl -u mpcium
-journalctl -f -u mpcium  # Follow logs
+journalctl -u mpc
+journalctl -f -u mpc  # Follow logs
 ```
 
 ### Health Checks
@@ -293,7 +293,7 @@ The deployment includes Consul-based health monitoring. Check cluster health via
 
 ### Backup Management
 
-BadgerDB automatically creates encrypted backups in `/opt/mpcium/backups/`. Ensure regular backup of:
+BadgerDB automatically creates encrypted backups in `/opt/mpc/backups/`. Ensure regular backup of:
 
 - Database encryption password
 - Node identity files
@@ -307,7 +307,7 @@ BadgerDB automatically creates encrypted backups in `/opt/mpcium/backups/`. Ensu
 
 ```bash
 # Check service logs
-journalctl -u mpcium --no-pager
+journalctl -u mpc --no-pager
 
 # Verify configuration
 sudo ./setup-config.sh verify
@@ -325,11 +325,11 @@ Service logs are available via systemd journal:
 
 ```bash
 # Recent logs
-journalctl -u mpcium -n 100
+journalctl -u mpc -n 100
 
 # Logs since specific time
-journalctl -u mpcium --since "1 hour ago"
+journalctl -u mpc --since "1 hour ago"
 
 # Filter by log level
-journalctl -u mpcium -p err
+journalctl -u mpc -p err
 ```

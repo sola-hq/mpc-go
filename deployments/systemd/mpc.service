@@ -1,0 +1,42 @@
+[Unit]
+Description=MPC Node
+Documentation=https://github.com/fystack/mpc
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=mpc
+Group=mpc
+WorkingDirectory=/opt/mpc
+ExecStart=/usr/local/bin/mpc start --name ${MPC_NODE_NAME} --config /etc/mpc/config.yaml --password-file=%d/mpc-db-password.cred
+EnvironmentFile=/opt/mpc/.env
+SetCredentialEncrypted=mpc-db-password.cred:DB_PASSWORD_BASE64_BLOB_DATA
+SetCredentialEncrypted=mpc-identity-password.cred:IDENTITY_PASSWORD_BASE64_BLOB_DATA
+Restart=always
+RestartSec=20
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=mpc
+KillMode=mixed
+KillSignal=SIGTERM
+TimeoutStopSec=30
+
+# Security settings
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=full
+ProtectHome=yes
+ReadOnlyPaths=/etc/mpc
+ReadWritePaths=/opt/mpc
+CapabilityBoundingSet=CAP_DAC_READ_SEARCH
+AmbientCapabilities=
+SystemCallFilter=@system-service
+SystemCallFilter=~@privileged @resources
+
+# Resource limits
+LimitNOFILE=65536
+LimitNPROC=4096
+
+[Install]
+WantedBy=multi-user.target

@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-CRED_PATH="/etc/mpcium/mpcium-db-password.cred"
+CRED_PATH="/etc/mpc/mpc-db-password.cred"
 HOST_SECRET="/var/lib/systemd/credential.secret"
 
 # Check if systemd-creds is available
@@ -20,15 +20,15 @@ fi
 
 echo "🔑 Using host secret encryption"
 
-# Ensure /etc/mpcium exists
-sudo mkdir -p /etc/mpcium
-sudo chmod 700 /etc/mpcium
-sudo chown root:root /etc/mpcium
+# Ensure /etc/mpc exists
+sudo mkdir -p /etc/mpc
+sudo chmod 700 /etc/mpc
+sudo chown root:root /etc/mpc
 
 echo "🔒 PASSWORD REQUIREMENTS & RECOMMENDATIONS:"
 echo "• Password must be EXACTLY 16, 24, or 32 characters long"
 echo "• Use a password manager (Bitwarden, 1Password, LastPass, etc.) to generate a unique password"
-echo "• Each mpcium node should use a DIFFERENT password for security"
+echo "• Each mpc node should use a DIFFERENT password for security"
 echo "• Use special characters: !@#$^&*()-_=+[]{}|;:,.<>?/~"
 echo "• Examples:"
 echo "  - 16 chars: 'P@ssw0rd12345678'"
@@ -38,7 +38,7 @@ echo
 
 # Prompt for password twice
 while true; do
-    read -s -r -p "🔐 Enter mpcium database password: " PASSWORD
+    read -s -r -p "🔐 Enter mpc database password: " PASSWORD
     echo
     read -s -r -p "🔐 Confirm password: " CONFIRM
     echo
@@ -72,14 +72,14 @@ echo
 
 # Check if identity was generated with encryption
 echo
-read -p "❓ Did you use 'mpcium-cli generate-identity --encrypt' to generate your identity with encryption mode? (y/n): " USE_ENCRYPTED_IDENTITY
+read -p "❓ Did you use 'mpc-cli generate-identity --encrypt' to generate your identity with encryption mode? (y/n): " USE_ENCRYPTED_IDENTITY
 
 if [[ "$USE_ENCRYPTED_IDENTITY" =~ ^[Yy]$ ]]; then
     echo
     echo "🔐 Identity Encryption Password Required:"
     echo "• This password decrypts your node identity files"
-    echo "• Must be the SAME password used with 'mpcium-cli generate-identity --encrypt'"
-    echo "• Without this password, the mpcium node cannot start"
+    echo "• Must be the SAME password used with 'mpc-cli generate-identity --encrypt'"
+    echo "• Without this password, the mpc node cannot start"
     echo
     
     while true; do
@@ -95,8 +95,8 @@ if [[ "$USE_ENCRYPTED_IDENTITY" =~ ^[Yy]$ ]]; then
     done
     
     # Encrypt identity password with host secret - using here-doc to preserve all special characters
-    IDENTITY_CRED_PATH="/etc/mpcium/mpcium-identity-password.cred"
-    sudo systemd-creds encrypt --name=mpcium-identity-password.cred - "$IDENTITY_CRED_PATH" <<< "$IDENTITY_PASSWORD"
+    IDENTITY_CRED_PATH="/etc/mpc/mpc-identity-password.cred"
+    sudo systemd-creds encrypt --name=mpc-identity-password.cred - "$IDENTITY_CRED_PATH" <<< "$IDENTITY_PASSWORD"
     sudo chmod 600 "$IDENTITY_CRED_PATH"
     sudo chown root:root "$IDENTITY_CRED_PATH"
     
@@ -105,7 +105,7 @@ if [[ "$USE_ENCRYPTED_IDENTITY" =~ ^[Yy]$ ]]; then
 fi
 
 # Encrypt with host secret - using here-doc to preserve all special characters
-sudo systemd-creds encrypt --name=mpcium-db-password.cred - "$CRED_PATH" <<< "$PASSWORD"
+sudo systemd-creds encrypt --name=mpc-db-password.cred - "$CRED_PATH" <<< "$PASSWORD"
 
 sudo chmod 600 "$CRED_PATH"
 sudo chown root:root "$CRED_PATH"

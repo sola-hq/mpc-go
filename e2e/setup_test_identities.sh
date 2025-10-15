@@ -25,7 +25,7 @@ echo "🚀 Setting up E2E Test Node Identities..."
 
 # Generate random password for badger encryption
 echo "🔐 Generating random password for badger encryption..."
-BADGER_PASSWORD=$(< /dev/urandom tr -dc 'A-Za-z0-9' | head -c 32)
+BADGER_PASSWORD=$(openssl rand -base64 32 | tr -d '=+/' | head -c 32)
 echo "✅ Generated password: $BADGER_PASSWORD"
 
 # Generate config.test.yaml from template
@@ -79,8 +79,8 @@ for i in $(seq 0 $((NUM_NODES-1))); do
     echo "📝 Generating identity for test_node$i..."
     cd "$BASE_DIR/test_node$i"
     
-    # Generate identity using mpcium-cli
-    mpcium-cli generate-identity --node "test_node$i"
+    # Generate identity using mpc-cli
+    mpc-cli identity generate --node "test_node$i"
     
     cd - > /dev/null
 done
@@ -99,7 +99,7 @@ done
 # Generate test event initiator
 echo "🔐 Generating test event initiator..."
 cd "$BASE_DIR"
-mpcium-cli generate-initiator --node-name test_event_initiator --output-dir . --overwrite
+mpc-cli initiator generate --node-name test_event_initiator --output-dir . --overwrite
 
 # Extract the public key from the generated identity
 if [ -f "test_event_initiator.identity.json" ]; then

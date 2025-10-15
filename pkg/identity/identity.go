@@ -48,7 +48,7 @@ type Store interface {
 	SetSymmetricKey(peerID string, key []byte)
 	GetSymmetricKey(peerID string) ([]byte, error)
 	RemoveSymmetricKey(peerID string)
-	GetSymetricKeyCount() int
+	GetSymmetricKeyCount() int
 	CheckSymmetricKeyComplete(desired int) bool
 
 	EncryptMessage(plaintext []byte, peerID string) ([]byte, error)
@@ -363,7 +363,7 @@ func (s *fileStore) RemoveSymmetricKey(peerID string) {
 	delete(s.symmetricKeys, peerID)
 }
 
-func (s *fileStore) GetSymetricKeyCount() int {
+func (s *fileStore) GetSymmetricKeyCount() int {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return len(s.symmetricKeys)

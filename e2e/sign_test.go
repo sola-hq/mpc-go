@@ -273,14 +273,14 @@ func testSigningOneNodeOffline(t *testing.T, suite *E2ETestSuite) {
 	nodeToStop := 2
 	t.Logf("Stopping node %d to test fault tolerance...", nodeToStop)
 
-	if nodeToStop < len(suite.mpciumProcesses) && suite.mpciumProcesses[nodeToStop] != nil {
-		err := suite.mpciumProcesses[nodeToStop].Process.Kill()
+	if nodeToStop < len(suite.mpProcesses) && suite.mpProcesses[nodeToStop] != nil {
+		err := suite.mpProcesses[nodeToStop].Process.Kill()
 		if err != nil {
 			t.Logf("Failed to stop node %d: %v", nodeToStop, err)
 		} else {
 			t.Logf("Successfully stopped node %d", nodeToStop)
 			// Mark as stopped
-			suite.mpciumProcesses[nodeToStop] = nil
+			suite.mpProcesses[nodeToStop] = nil
 		}
 	}
 
