@@ -51,7 +51,7 @@ func RequestPassword() (string, error) {
 func ContainsAtLeastNSpecial(s string, n int) bool {
 	count := 0
 	for _, r := range s {
-		if !((r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9')) {
+		if (r < 'a' || r > 'z') && (r < 'A' || r > 'Z') && (r < '0' || r > '9') {
 			count++
 			if count >= n {
 				return true

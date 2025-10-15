@@ -159,7 +159,7 @@ func (r *registry) Ready() error {
 
 	_, err := r.consulKV.Put(kv, nil)
 	if err != nil {
-		return fmt.Errorf("Put ready key failed: %w", err)
+		return fmt.Errorf("put ready key failed: %w", err)
 	}
 
 	_, err = r.healthCheck.Listen(r.composeHealthCheckTopic(r.nodeID), func(data []byte) {
@@ -172,7 +172,7 @@ func (r *registry) Ready() error {
 		}
 	})
 	if err != nil {
-		return fmt.Errorf("Listen health check failed: %w", err)
+		return fmt.Errorf("listen health check failed: %w", err)
 	}
 	return nil
 }
@@ -315,7 +315,7 @@ func (r *registry) Resign() error {
 
 	_, err := r.consulKV.Delete(k, nil)
 	if err != nil {
-		return fmt.Errorf("Delete ready key failed: %w", err)
+		return fmt.Errorf("delete ready key failed: %w", err)
 	}
 
 	return nil

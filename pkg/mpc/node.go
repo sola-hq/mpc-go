@@ -88,7 +88,7 @@ func (p *Node) CreateKeyGenSession(
 
 	keyInfo, _ := p.getKeyInfo(sessionType, walletID)
 	if keyInfo != nil {
-		return nil, fmt.Errorf("Key already exists: %s", walletID)
+		return nil, fmt.Errorf("key already exists: %s", walletID)
 	}
 
 	switch sessionType {
@@ -97,7 +97,7 @@ func (p *Node) CreateKeyGenSession(
 	case SessionTypeEDDSA:
 		return p.createEDDSAKeyGenSession(walletID, threshold, DefaultVersion, resultQueue)
 	default:
-		return nil, fmt.Errorf("Unknown session type: %s", sessionType)
+		return nil, fmt.Errorf("unknown session type: %s", sessionType)
 	}
 }
 

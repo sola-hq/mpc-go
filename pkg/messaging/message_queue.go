@@ -12,7 +12,7 @@ import (
 )
 
 var (
-	ErrPermament = errors.New("Permanent messaging error")
+	ErrPermanent = errors.New("permanent messaging error")
 )
 
 type MessageQueue interface {
@@ -128,7 +128,7 @@ func (mq *msgQueue) Dequeue(topic string, handler func(message []byte) error) er
 		logger.Debug("Received message", "meta", meta)
 		err := handler(msg.Data())
 		if err != nil {
-			if errors.Is(err, ErrPermament) {
+			if errors.Is(err, ErrPermanent) {
 				logger.Info("Permanent error on message", "meta", meta)
 				if err := msg.Term(); err != nil {
 					logger.Error("Failed to terminate message", err)

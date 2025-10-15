@@ -100,7 +100,7 @@ func (s *eddsaSigningSession) Init(tx *big.Int) error {
 	result := lo.Intersect(s.participantPeerIDs, keyInfo.ParticipantPeerIDs)
 	if len(result) < keyInfo.Threshold+1 {
 		return fmt.Errorf(
-			"Incompatible peerIDs to participate in signing. Current participants: %v, expected participants: %v",
+			"incompatible peerIDs to participate in signing. Current participants: %v, expected participants: %v",
 			s.participantPeerIDs,
 			keyInfo.ParticipantPeerIDs,
 		)

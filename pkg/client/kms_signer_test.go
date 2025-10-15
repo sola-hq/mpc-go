@@ -81,7 +81,7 @@ func TestNewKMSSigner_ValidationErrors(t *testing.T) {
 			Region: "us-east-1",
 		})
 		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "KeyID is required")
+		assert.Contains(t, err.Error(), "keyID is required")
 	})
 }
 
@@ -117,8 +117,8 @@ func TestKMSSigner_PublicKey(t *testing.T) {
 	// Verify we can parse the public key back
 	parsedPubKey, err := encryption.ParseP256PublicKeyFromBytes(pubKeyBytes)
 	require.NoError(t, err)
-	assert.Equal(t, privateKey.PublicKey.X, parsedPubKey.X)
-	assert.Equal(t, privateKey.PublicKey.Y, parsedPubKey.Y)
+	assert.Equal(t, privateKey.X, parsedPubKey.X)
+	assert.Equal(t, privateKey.Y, parsedPubKey.Y)
 }
 
 func TestKMSSigner_PublicKey_NotLoaded(t *testing.T) {

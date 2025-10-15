@@ -209,7 +209,7 @@ func (s *session) receiveBroadcastTssMessage(rawMsg []byte) {
 
 	err = s.identityStore.VerifyMessage(msg)
 	if err != nil {
-		s.ErrCh <- fmt.Errorf("Failed to verify message: %w, tampered message", err)
+		s.ErrCh <- fmt.Errorf("failed to verify message: %w, tampered message", err)
 		return
 	}
 
@@ -268,7 +268,7 @@ func (s *session) subscribeDirectTopicAsync(topic string) error {
 		go s.receiveP2PTssMessage(t, cipher)
 	})
 	if err != nil {
-		return fmt.Errorf("Failed to subscribe to direct topic %s: %w", t, err)
+		return fmt.Errorf("failed to subscribe to direct topic %s: %w", t, err)
 	}
 	s.directSubs = append(s.directSubs, sub)
 	return nil
@@ -291,7 +291,7 @@ func (s *session) subscribeBroadcastAsync() {
 			s.receiveBroadcastTssMessage(natMsg.Data)
 		})
 		if err != nil {
-			s.ErrCh <- fmt.Errorf("Failed to subscribe to broadcast topic %s: %w", topic, err)
+			s.ErrCh <- fmt.Errorf("failed to subscribe to broadcast topic %s: %w", topic, err)
 			return
 		}
 		s.broadcastSub = sub
