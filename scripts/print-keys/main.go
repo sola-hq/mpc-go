@@ -24,7 +24,7 @@ var rootCmd = &cobra.Command{
 
 func init() {
 	rootCmd.Flags().StringVarP(&dbPath, "db-path", "p", "", "Path to the BadgerDB database directory (required)")
-	rootCmd.MarkFlagRequired("db-path")
+	_ = rootCmd.MarkFlagRequired("db-path")
 }
 
 func main() {

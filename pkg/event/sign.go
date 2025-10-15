@@ -1,13 +1,5 @@
 package event
 
-const (
-	SigningPublisherStream     = "mpc-signing"
-	SigningConsumerStream      = "mpc-signing-consumer"
-	SigningRequestTopic        = "mpc.signing_request.*"
-	SigningResultTopic         = "mpc.mpc_signing_result.*"
-	SigningResultCompleteTopic = "mpc.mpc_signing_result.complete"
-)
-
 type SigningResultEvent struct {
 	ResultType          ResultType `json:"result_type"`
 	ErrorCode           ErrorCode  `json:"error_code"`

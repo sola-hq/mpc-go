@@ -37,7 +37,7 @@ func NewStartCmd() *cobra.Command {
 	cmd.Flags().StringP("password-file", "f", "", "Path to file containing BadgerDB password")
 	cmd.Flags().StringP("identity-password-file", "k", "", "Path to file containing password for decrypting .age encrypted node private key")
 	cmd.Flags().Bool("debug", false, "Enable debug logging")
-	cmd.MarkFlagRequired("name")
+	_ = cmd.MarkFlagRequired("name")
 
 	return cmd
 }
@@ -107,7 +107,7 @@ func runNode(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		logger.Fatal("Failed to create keygen jetstream broker", err)
 	}
-	signingBroker, err := messaging.NewJetStreamBroker(ctx, natsConn, event.SigningPublisherStream, []string{
+	signingBroker, err := messaging.NewJetStreamBroker(ctx, natsConn, event.SigningBrokerStream, []string{
 		event.SigningRequestTopic,
 	})
 	if err != nil {
@@ -116,16 +116,16 @@ func runNode(cmd *cobra.Command, args []string) error {
 
 	directMessaging := messaging.NewNatsDirectMessaging(natsConn)
 	mqManager := messaging.NewNATsMessageQueueManager("mpc", []string{
-		"mpc.mpc_keygen_result.*",
+		event.KeygenResultTopic,
 		event.SigningResultTopic,
-		"mpc.mpc_reshare_result.*",
+		event.ReshareResultTopic,
 	}, natsConn)
 
-	genKeyResultQueue := mqManager.NewMessageQueue("mpc_keygen_result")
+	genKeyResultQueue := mqManager.NewMessageQueue(event.KeygenResultQueueName)
 	defer genKeyResultQueue.Close()
-	singingResultQueue := mqManager.NewMessageQueue("mpc_signing_result")
+	singingResultQueue := mqManager.NewMessageQueue(event.SigningResultQueueName)
 	defer singingResultQueue.Close()
-	reshareResultQueue := mqManager.NewMessageQueue("mpc_reshare_result")
+	reshareResultQueue := mqManager.NewMessageQueue(event.ReshareResultQueueName)
 	defer reshareResultQueue.Close()
 
 	logger.Info("Node is running", "ID", nodeID, "name", nodeName)

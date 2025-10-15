@@ -41,7 +41,7 @@ func (tc *timeOutConsumer) Run() {
 		}
 		logger.Info("Received advisory message", "stream", advisory.Stream, "stream_seq", advisory.StreamSeq)
 
-		if advisory.Stream == event.SigningPublisherStream {
+		if advisory.Stream == event.SigningBrokerStream {
 			logger.Info("Received max deliveries exceeded advisory", "stream", advisory.Stream, "stream_seq", advisory.StreamSeq)
 			js, _ := tc.natsConn.JetStream()
 			failedMsg, err := js.GetMsg(advisory.Stream, advisory.StreamSeq)

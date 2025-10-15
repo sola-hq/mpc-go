@@ -41,7 +41,7 @@ func NewGenerateIdentityCmd(ctx context.Context) *cobra.Command {
 	cmd.Flags().StringVarP(&identityDir, "output-dir", "o", "identity", "Output directory for identity files")
 	cmd.Flags().BoolVarP(&encryptKey, "encrypt", "e", false, "Encrypt private key with Age (recommended for production)")
 	cmd.Flags().BoolVarP(&overwrite, "overwrite", "f", false, "Overwrite identity files if they already exist")
-	cmd.MarkFlagRequired("node")
+	_ = cmd.MarkFlagRequired("node")
 
 	return cmd
 }

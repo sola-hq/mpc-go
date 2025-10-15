@@ -280,11 +280,7 @@ func writeBenchmarkToFile(content, outputFile, operationType string) (err error)
 	if err != nil {
 		return fmt.Errorf("failed to open file: %w", err)
 	}
-	defer func() {
-		if closeErr := file.Close(); closeErr != nil && err == nil {
-			err = fmt.Errorf("failed to close file: %w", closeErr)
-		}
-	}()
+	defer file.Close()
 
 	// Write content to file
 	if _, err := file.WriteString(content); err != nil {

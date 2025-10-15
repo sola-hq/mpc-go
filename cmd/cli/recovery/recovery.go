@@ -43,8 +43,8 @@ func newRecoverCmd() *cobra.Command {
 	cmd.Flags().StringVarP(&backupDir, "backup-dir", "b", "", "Directory containing encrypted backup files (required)")
 	cmd.Flags().StringVarP(&recoveryPath, "recovery-path", "r", "", "Target path for database recovery (required)")
 	cmd.Flags().BoolVarP(&force, "force", "f", false, "Force overwrite if recovery path already exists")
-	cmd.MarkFlagRequired("backup-dir")
-	cmd.MarkFlagRequired("recovery-path")
+	_ = cmd.MarkFlagRequired("backup-dir")
+	_ = cmd.MarkFlagRequired("recovery-path")
 
 	return cmd
 }

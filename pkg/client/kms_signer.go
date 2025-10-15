@@ -42,10 +42,10 @@ func NewKMSSigner(keyType types.EventInitiatorKeyType, opts KMSSignerOptions) (S
 
 	// Validate required options
 	if opts.KeyID == "" {
-		return nil, fmt.Errorf("KeyID is required for KMS signer")
+		return nil, fmt.Errorf("keyID is required for KMS signer")
 	}
 	if opts.Region == "" {
-		return nil, fmt.Errorf("Region is required for KMS signer")
+		return nil, fmt.Errorf("region is required for KMS signer")
 	}
 
 	// Create AWS config

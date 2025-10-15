@@ -13,11 +13,6 @@ import (
 	"github.com/nats-io/nats.go"
 )
 
-const (
-	GenerateWalletSuccessTopic = "mpc.mpc_keygen_result.*"  // wildcard to listen to all success events
-	ResharingSuccessTopic      = "mpc.mpc_reshare_result.*" // wildcard to listen to all success events
-)
-
 type MPCClient interface {
 	CreateWallet(walletID string) error
 	OnWalletCreationResult(callback func(event event.KeygenResultEvent)) error
@@ -30,13 +25,13 @@ type MPCClient interface {
 }
 
 type mpcClient struct {
-	signingBroker       messaging.MessageBroker
-	keygenBroker        messaging.MessageBroker
-	pubsub              messaging.PubSub
-	genKeySuccessQueue  messaging.MessageQueue
-	signResultQueue     messaging.MessageQueue
-	reshareSuccessQueue messaging.MessageQueue
-	signer              Signer
+	signingBroker      messaging.MessageBroker
+	keygenBroker       messaging.MessageBroker
+	pubsub             messaging.PubSub
+	genKeyResultQueue  messaging.MessageQueue
+	signResultQueue    messaging.MessageQueue
+	reshareResultQueue messaging.MessageQueue
+	signer             Signer
 }
 
 // Options defines configuration options for creating a new MPCClient
@@ -59,9 +54,9 @@ func NewMPCClient(opts Options) MPCClient {
 	signingBroker, err := messaging.NewJetStreamBroker(
 		context.Background(),
 		opts.NatsConn,
-		"mpc-signing",
+		event.SigningBrokerStream,
 		[]string{
-			"mpc.signing_request.*",
+			event.SigningRequestTopic,
 		},
 	)
 	if err != nil {
@@ -70,9 +65,9 @@ func NewMPCClient(opts Options) MPCClient {
 	keygenBroker, err := messaging.NewJetStreamBroker(
 		context.Background(),
 		opts.NatsConn,
-		"mpc-keygen",
+		event.KeygenBrokerStream,
 		[]string{
-			"mpc.keygen_request.*",
+			event.KeygenRequestTopic,
 		},
 	)
 	if err != nil {
@@ -82,23 +77,23 @@ func NewMPCClient(opts Options) MPCClient {
 	pubsub := messaging.NewNATSPubSub(opts.NatsConn)
 
 	manager := messaging.NewNATsMessageQueueManager("mpc", []string{
-		"mpc.mpc_keygen_result.*",
-		"mpc.mpc_signing_result.*",
-		"mpc.mpc_reshare_result.*",
+		event.KeygenResultTopic,
+		event.SigningResultTopic,
+		event.ReshareResultTopic,
 	}, opts.NatsConn)
 
-	genKeySuccessQueue := manager.NewMessageQueue("mpc_keygen_result")
-	signResultQueue := manager.NewMessageQueue("mpc_signing_result")
-	reshareSuccessQueue := manager.NewMessageQueue("mpc_reshare_result")
+	genKeySuccessQueue := manager.NewMessageQueue(event.KeygenResultQueueName)
+	signResultQueue := manager.NewMessageQueue(event.SigningResultQueueName)
+	reshareSuccessQueue := manager.NewMessageQueue(event.ReshareResultQueueName)
 
 	return &mpcClient{
-		signingBroker:       signingBroker,
-		keygenBroker:        keygenBroker,
-		pubsub:              pubsub,
-		genKeySuccessQueue:  genKeySuccessQueue,
-		signResultQueue:     signResultQueue,
-		reshareSuccessQueue: reshareSuccessQueue,
-		signer:              opts.Signer,
+		signingBroker:      signingBroker,
+		keygenBroker:       keygenBroker,
+		pubsub:             pubsub,
+		genKeyResultQueue:  genKeySuccessQueue,
+		signResultQueue:    signResultQueue,
+		reshareResultQueue: reshareSuccessQueue,
+		signer:             opts.Signer,
 	}
 }
 
@@ -132,7 +127,7 @@ func (c *mpcClient) CreateWallet(walletID string) error {
 
 // The callback will be invoked whenever a wallet creation result is received.
 func (c *mpcClient) OnWalletCreationResult(callback func(event event.KeygenResultEvent)) error {
-	err := c.genKeySuccessQueue.Dequeue(GenerateWalletSuccessTopic, func(msg []byte) error {
+	err := c.genKeyResultQueue.Dequeue(event.KeygenResultTopic, func(msg []byte) error {
 		var event event.KeygenResultEvent
 		err := json.Unmarshal(msg, &event)
 		if err != nil {
@@ -216,7 +211,7 @@ func (c *mpcClient) Resharing(msg *types.ResharingMessage) error {
 
 func (c *mpcClient) OnResharingResult(callback func(event event.ResharingResultEvent)) error {
 
-	err := c.reshareSuccessQueue.Dequeue(ResharingSuccessTopic, func(msg []byte) error {
+	err := c.reshareResultQueue.Dequeue(event.ReshareResultTopic, func(msg []byte) error {
 		logger.Info("Received reshare success message", "raw", string(msg))
 		var event event.ResharingResultEvent
 		err := json.Unmarshal(msg, &event)

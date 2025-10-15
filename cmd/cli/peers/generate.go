@@ -12,7 +12,6 @@ import (
 
 // newGeneratePeersCmd creates a new generate peers command
 func newGeneratePeersCmd() *cobra.Command {
-	// 文件内私有变量
 	var (
 		generateNodes      int
 		generateOutputPath string
@@ -30,7 +29,7 @@ func newGeneratePeersCmd() *cobra.Command {
 	// Add flags
 	cmd.Flags().IntVarP(&generateNodes, "number", "n", 0, "Number of nodes to generate (required)")
 	cmd.Flags().StringVarP(&generateOutputPath, "output", "o", PEERS_FILE_NAME, "Output file path")
-	cmd.MarkFlagRequired("number")
+	_ = cmd.MarkFlagRequired("number")
 
 	return cmd
 }

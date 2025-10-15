@@ -66,7 +66,7 @@ func TestNewMPCClient_NoSigner(t *testing.T) {
 
 func TestMPCClient_CreateWallet(t *testing.T) {
 	mockSigner := &MockSigner{}
-	
+
 	// Set up expectations
 	testSignature := []byte("test-signature")
 	mockSigner.On("Sign", mock.AnythingOfType("[]uint8")).Return(testSignature, nil)
@@ -79,20 +79,20 @@ func TestMPCClient_CreateWallet(t *testing.T) {
 	// Test CreateWallet - this will test the signing logic
 	// Note: This test would require mocking the messaging broker as well
 	// For now, we test that the signer is called correctly
-	
+
 	walletID := "test-wallet-123"
-	
+
 	// We can't fully test CreateWallet without mocking the broker,
 	// but we can test the signing part by calling it directly
-	
+
 	// Simulate what CreateWallet does with signing
 	msg := &types.GenerateKeyMessage{
 		WalletID: walletID,
 	}
-	
+
 	raw, err := msg.Raw()
 	require.NoError(t, err)
-	
+
 	signature, err := client.signer.Sign(raw)
 	require.NoError(t, err)
 	assert.Equal(t, testSignature, signature)
@@ -103,7 +103,7 @@ func TestMPCClient_CreateWallet(t *testing.T) {
 
 func TestMPCClient_CreateWallet_SigningError(t *testing.T) {
 	mockSigner := &MockSigner{}
-	
+
 	// Set up signer to return error
 	mockSigner.On("Sign", mock.AnythingOfType("[]uint8")).Return([]byte(nil), errors.New("signing failed"))
 
@@ -115,10 +115,10 @@ func TestMPCClient_CreateWallet_SigningError(t *testing.T) {
 	msg := &types.GenerateKeyMessage{
 		WalletID: "test-wallet",
 	}
-	
+
 	raw, err := msg.Raw()
 	require.NoError(t, err)
-	
+
 	signature, err := client.signer.Sign(raw)
 	assert.Error(t, err)
 	assert.Nil(t, signature)
@@ -129,7 +129,7 @@ func TestMPCClient_CreateWallet_SigningError(t *testing.T) {
 
 func TestMPCClient_SignTransaction(t *testing.T) {
 	mockSigner := &MockSigner{}
-	
+
 	// Set up expectations
 	testSignature := []byte("test-transaction-signature")
 	mockSigner.On("Sign", mock.AnythingOfType("[]uint8")).Return(testSignature, nil)
@@ -146,10 +146,10 @@ func TestMPCClient_SignTransaction(t *testing.T) {
 		TxID:                "test-tx-123",
 		Tx:                  []byte("test transaction data"),
 	}
-	
+
 	raw, err := msg.Raw()
 	require.NoError(t, err)
-	
+
 	signature, err := client.signer.Sign(raw)
 	require.NoError(t, err)
 	assert.Equal(t, testSignature, signature)
@@ -159,7 +159,7 @@ func TestMPCClient_SignTransaction(t *testing.T) {
 
 func TestMPCClient_Resharing(t *testing.T) {
 	mockSigner := &MockSigner{}
-	
+
 	// Set up expectations
 	testSignature := []byte("test-resharing-signature")
 	mockSigner.On("Sign", mock.AnythingOfType("[]uint8")).Return(testSignature, nil)
@@ -176,10 +176,10 @@ func TestMPCClient_Resharing(t *testing.T) {
 		KeyType:      types.KeyTypeSecp256k1,
 		WalletID:     "test-wallet",
 	}
-	
+
 	raw, err := msg.Raw()
 	require.NoError(t, err)
-	
+
 	signature, err := client.signer.Sign(raw)
 	require.NoError(t, err)
 	assert.Equal(t, testSignature, signature)
@@ -190,7 +190,7 @@ func TestMPCClient_Resharing(t *testing.T) {
 func TestSignerInterface_Compliance(t *testing.T) {
 	// Test that our mock signer implements the interface correctly
 	mockSigner := &MockSigner{}
-	
+
 	// Set up mock expectations
 	mockSigner.On("Algorithm").Return(types.EventInitiatorKeyTypeP256)
 	mockSigner.On("PublicKey").Return("mock-public-key-hex", nil)
@@ -215,7 +215,7 @@ func TestSignerInterface_Compliance(t *testing.T) {
 
 func TestSignerInterface_ErrorHandling(t *testing.T) {
 	mockSigner := &MockSigner{}
-	
+
 	// Set up error cases
 	mockSigner.On("PublicKey").Return("", errors.New("public key error"))
 	mockSigner.On("Sign", mock.Anything).Return([]byte(nil), errors.New("signing error"))
@@ -288,7 +288,7 @@ func createTestMPCClient(signer Signer) *mpcClient {
 func TestCreateTestMPCClient(t *testing.T) {
 	mockSigner := &MockSigner{}
 	client := createTestMPCClient(mockSigner)
-	
+
 	assert.NotNil(t, client)
 	assert.Equal(t, mockSigner, client.signer)
 }
