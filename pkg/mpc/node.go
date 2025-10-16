@@ -20,9 +20,9 @@ import (
 )
 
 const (
-	PurposeKeygen  string = "keygen"
-	PurposeSign    string = "sign"
-	PurposeReshare string = "reshare"
+	PurposeKeygen    string = "keygen"
+	PurposeSign      string = "sign"
+	PurposeResharing string = "resharing"
 
 	BackwardCompatibleVersion int = 0
 	DefaultVersion            int = 1
@@ -106,7 +106,7 @@ func (p *Node) CreateKeyGenSession(
 
 func (p *Node) createECDSAKeyGenSession(walletID string, threshold int, version int, resultQueue messaging.MessageQueue) (core.KeyGenSession, error) {
 	readyPeerIDs := p.peerRegistry.GetReadyPeersIncludeSelf()
-	selfPartyID, allPartyIDs := p.generatePartyIDs(PurposeKeygen, readyPeerIDs, version)
+	selfPartyID, allPartyIDs := p.keygenPartyIDs(PurposeKeygen, readyPeerIDs, version)
 	session := ecdsa.NewECDSAKeygenSession(
 		walletID,
 		p.pubSub,
@@ -126,7 +126,7 @@ func (p *Node) createECDSAKeyGenSession(walletID string, threshold int, version 
 
 func (p *Node) createEDDSAKeyGenSession(walletID string, threshold int, version int, resultQueue messaging.MessageQueue) (core.KeyGenSession, error) {
 	readyPeerIDs := p.peerRegistry.GetReadyPeersIncludeSelf()
-	selfPartyID, allPartyIDs := p.generatePartyIDs(PurposeKeygen, readyPeerIDs, version)
+	selfPartyID, allPartyIDs := p.keygenPartyIDs(PurposeKeygen, readyPeerIDs, version)
 	session := eddsa.NewEDDSAKeygenSession(
 		walletID,
 		p.pubSub,
@@ -177,7 +177,7 @@ func (p *Node) CreateSigningSession(
 		return nil, err
 	}
 
-	selfPartyID, allPartyIDs := p.generatePartyIDs(PurposeKeygen, readyParticipantIDs, version)
+	selfPartyID, allPartyIDs := p.keygenPartyIDs(PurposeKeygen, readyParticipantIDs, version)
 
 	switch sessionType {
 	case core.SessionTypeECDSA:
@@ -221,6 +221,31 @@ func (p *Node) CreateSigningSession(
 	return nil, errors.New("unknown session type")
 }
 
+// keygenPartyIDs generates the party IDs for key generation
+// It returns the self party ID and all party IDs
+// It also sorts the party IDs in place
+func (n *Node) keygenPartyIDs(
+	label string,
+	readyPeerIDs []string,
+	version int,
+) (self *tss.PartyID, all []*tss.PartyID) {
+	// Pre-allocate slice with exact size needed
+	partyIDs := make([]*tss.PartyID, 0, len(readyPeerIDs))
+
+	// Create all party IDs in one pass
+	for _, peerID := range readyPeerIDs {
+		partyID := core.CreatePartyID(peerID, label, version)
+		if peerID == n.nodeID {
+			self = partyID
+		}
+		partyIDs = append(partyIDs, partyID)
+	}
+
+	// Sort party IDs in place
+	all = tss.SortPartyIDs(partyIDs, 0)
+	return
+}
+
 func (p *Node) getKeyInfo(sessionType core.SessionType, walletID string) (*keyinfo.KeyInfo, error) {
 	var keyID string
 	switch sessionType {
@@ -253,14 +278,14 @@ func (p *Node) ensureNodeIsParticipant(keyInfo *keyinfo.KeyInfo) error {
 	return nil
 }
 
-func (p *Node) CreateReshareSession(
+func (p *Node) CreateResharingSession(
 	sessionType core.SessionType,
 	walletID string,
 	newThreshold int,
 	newPeerIDs []string,
 	isNewPeer bool,
 	resultQueue messaging.MessageQueue,
-) (core.ReshareSession, error) {
+) (core.ResharingSession, error) {
 	// 1. Check peer readiness
 	count := p.peerRegistry.GetReadyPeersCount()
 	if count < int64(newThreshold)+1 {
@@ -332,8 +357,8 @@ func (p *Node) CreateReshareSession(
 
 	// 5. Generate party IDs
 	version := p.getVersion(sessionType, walletID)
-	oldSelf, oldAllPartyIDs := p.generatePartyIDs(PurposeKeygen, readyOldParticipantIDs, version)
-	newSelf, newAllPartyIDs := p.generatePartyIDs(PurposeReshare, newPeerIDs, version+1)
+	oldSelf, oldAllPartyIDs := p.keygenPartyIDs(PurposeKeygen, readyOldParticipantIDs, version)
+	newSelf, newAllPartyIDs := p.keygenPartyIDs(PurposeResharing, newPeerIDs, version+1)
 
 	// 6. Pick identity and call session constructor
 	var selfPartyID *tss.PartyID
@@ -356,7 +381,7 @@ func (p *Node) CreateReshareSession(
 			participantPeerIDs = oldKeyInfo.ParticipantPeerIDs
 		}
 
-		return ecdsa.NewECDSAReshareSession(
+		return ecdsa.NewECDSAResharingSession(
 			walletID,
 			p.pubSub,
 			p.direct,
@@ -377,7 +402,7 @@ func (p *Node) CreateReshareSession(
 		), nil
 
 	case core.SessionTypeEDDSA:
-		return eddsa.NewEDDSAReshareSession(
+		return eddsa.NewEDDSAResharingSession(
 			walletID,
 			p.pubSub,
 			p.direct,

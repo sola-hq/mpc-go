@@ -22,9 +22,9 @@ import (
 type SessionType string
 
 const (
-	TypeGenerateWalletResultFmt = "mpc.mpc_keygen_result.%s"
-	TypeReshareWalletResultFmt  = "mpc.mpc_reshare_result.%s"
-	TypeSigningResultFmt        = "mpc.mpc_signing_result.%s"
+	TypeGenerateWalletResultFmt  = "mpc.mpc_keygen_result.%s"
+	TypeResharingWalletResultFmt = "mpc.mpc_resharing_result.%s"
+	TypeSigningResultFmt         = "mpc.mpc_signing_result.%s"
 
 	SessionTypeECDSA SessionType = "session_ecdsa"
 	SessionTypeEDDSA SessionType = "session_eddsa"
@@ -69,7 +69,7 @@ type SigningSession interface {
 	Sign(onSuccess func(data []byte))
 }
 
-type ReshareSession interface {
+type ResharingSession interface {
 	Session
 	Init() error
 	Reshare(done func())

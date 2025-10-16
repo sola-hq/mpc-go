@@ -25,11 +25,11 @@ type EnqueueOptions struct {
 	IdempotentKey string
 }
 
-type msgQueue struct {
-	consumerName    string
-	js              jetstream.JetStream
-	consumer        jetstream.Consumer
-	consumerContext jetstream.ConsumeContext
+type messageQueue struct {
+	consumerName string
+	js           jetstream.JetStream
+	consumer     jetstream.Consumer
+	context      jetstream.ConsumeContext
 }
 
 type NATsMessageQueueManager struct {
@@ -74,7 +74,7 @@ func NewNATsMessageQueueManager(queueName string, subjectWildCards []string, nc 
 }
 
 func (m *NATsMessageQueueManager) NewMessageQueue(consumerName string) MessageQueue {
-	mq := &msgQueue{
+	mq := &messageQueue{
 		consumerName: consumerName,
 		js:           m.js,
 	}
@@ -83,7 +83,7 @@ func (m *NATsMessageQueueManager) NewMessageQueue(consumerName string) MessageQu
 		Name:          consumerName,
 		Durable:       consumerName,
 		MaxAckPending: 1000,
-		// If a message isn't acked within AckWait, it will be redelivered up to MaxDelive
+		// If a message isn't acknowledged within AckWait, it will be redelivered up to MaxDelive
 		AckWait:   30 * time.Second,
 		AckPolicy: jetstream.AckExplicitPolicy,
 		FilterSubjects: []string{
@@ -101,7 +101,7 @@ func (m *NATsMessageQueueManager) NewMessageQueue(consumerName string) MessageQu
 	return mq
 }
 
-func (mq *msgQueue) Enqueue(topic string, message []byte, options *EnqueueOptions) error {
+func (mq *messageQueue) Enqueue(topic string, message []byte, options *EnqueueOptions) error {
 	header := nats.Header{}
 	if options != nil {
 		header.Add("Nats-Msg-Id", options.IdempotentKey)
@@ -122,7 +122,7 @@ func (mq *msgQueue) Enqueue(topic string, message []byte, options *EnqueueOption
 	return nil
 }
 
-func (mq *msgQueue) Dequeue(topic string, handler func(message []byte) error) error {
+func (mq *messageQueue) Dequeue(topic string, handler func(message []byte) error) error {
 	c, err := mq.consumer.Consume(func(msg jetstream.Msg) {
 		meta, _ := msg.Metadata()
 		logger.Debug("Received message", "meta", meta)
@@ -149,13 +149,13 @@ func (mq *msgQueue) Dequeue(topic string, handler func(message []byte) error) er
 			logger.Error("Error acknowledging message: ", err)
 		}
 	})
-	mq.consumerContext = c
+	mq.context = c
 	return err
 }
 
-func (mq *msgQueue) Close() {
+func (mq *messageQueue) Close() {
 	// only close consumer if it was created - dequeue
-	if mq.consumerContext != nil {
-		mq.consumerContext.Stop()
+	if mq.context != nil {
+		mq.context.Stop()
 	}
 }

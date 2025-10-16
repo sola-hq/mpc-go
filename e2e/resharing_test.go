@@ -338,7 +338,7 @@ checkEdDSAResult:
 }
 
 func testSigningAfterResharing(t *testing.T, suite *E2ETestSuite) {
-	t.Log("Testing signing after resharing to verify reshared keys work correctly...")
+	t.Log("Testing signing after resharing to verify resharing keys work correctly...")
 
 	if len(suite.walletIDs) == 0 {
 		t.Fatal("No wallets available for signing after resharing. Make sure resharing ran first.")
@@ -364,18 +364,18 @@ func testSigningAfterResharing(t *testing.T, suite *E2ETestSuite) {
 
 	// Test messages to sign
 	testMessages := []string{
-		"Reshared key test message 1",
-		"Reshared key test message 2",
+		"Resharing key test message 1",
+		"Resharing key test message 2",
 	}
 
 	for _, walletID := range suite.walletIDs {
-		t.Logf("Testing signing with reshared keys for wallet %s", walletID)
+		t.Logf("Testing signing with resharing keys for wallet %s", walletID)
 
 		for i, message := range testMessages {
 			t.Logf("Signing message %d: %s", i+1, message)
 
-			// Test ECDSA signing with reshared keys
-			t.Run(fmt.Sprintf("ECDSA_Reshared_%s_%d", walletID, i), func(t *testing.T) {
+			// Test ECDSA signing with resharing keys
+			t.Run(fmt.Sprintf("ECDSA_Resharing_%s_%d", walletID, i), func(t *testing.T) {
 				testECDSASigningAfterResharing(t, suite, walletID, message, signingResults)
 			})
 		}
@@ -385,7 +385,7 @@ func testSigningAfterResharing(t *testing.T, suite *E2ETestSuite) {
 }
 
 func testECDSASigningAfterResharing(t *testing.T, suite *E2ETestSuite, walletID, message string, signingResults map[string]*event.SigningResultEvent) {
-	t.Logf("Testing ECDSA signing with reshared keys for wallet %s with message: %s", walletID, message)
+	t.Logf("Testing ECDSA signing with resharing keys for wallet %s with message: %s", walletID, message)
 
 	// Wait for listener setup
 	time.Sleep(1 * time.Second)
@@ -421,7 +421,7 @@ func testECDSASigningAfterResharing(t *testing.T, suite *E2ETestSuite, walletID,
 				if result.ResultType == event.ResultTypeError {
 					t.Errorf("ECDSA signing failed for wallet %s: %s (%s)", walletID, result.ErrorReason, result.ErrorCode)
 				} else {
-					t.Logf("ECDSA signing with reshared keys succeeded for wallet %s", walletID)
+					t.Logf("ECDSA signing with resharing keys succeeded for wallet %s", walletID)
 					assert.NotEmpty(t, result.R, "ECDSA R value should not be empty for wallet %s", walletID)
 					assert.NotEmpty(t, result.S, "ECDSA S value should not be empty for wallet %s", walletID)
 					assert.NotEmpty(t, result.SignatureRecovery, "ECDSA signature recovery should not be empty for wallet %s", walletID)

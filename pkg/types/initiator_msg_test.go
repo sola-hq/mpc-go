@@ -99,8 +99,8 @@ func TestResharingMessage_Raw(t *testing.T) {
 		NodeIDs:      []string{"node1", "node2", "node3"},
 		NewThreshold: 2,
 		KeyType:      KeyTypeEd25519,
-		WalletID:     "reshare-wallet",
-		Signature:    []byte("reshare-signature"),
+		WalletID:     "resharing-wallet",
+		Signature:    []byte("resharing-signature"),
 	}
 
 	raw, err := msg.Raw()
@@ -141,7 +141,7 @@ func TestResharingMessage_Sig(t *testing.T) {
 }
 
 func TestResharingMessage_InitiatorID(t *testing.T) {
-	walletID := "reshare-wallet-123"
+	walletID := "resharing-wallet-123"
 	msg := &ResharingMessage{
 		NodeIDs:      []string{"node1"},
 		NewThreshold: 0,

@@ -118,15 +118,15 @@ func runNode(cmd *cobra.Command, args []string) error {
 	mqManager := messaging.NewNATsMessageQueueManager("mpc", []string{
 		event.KeygenResultTopic,
 		event.SigningResultTopic,
-		event.ReshareResultTopic,
+		event.ResharingResultTopic,
 	}, natsConn)
 
 	genKeyResultQueue := mqManager.NewMessageQueue(event.KeygenResultQueueName)
 	defer genKeyResultQueue.Close()
 	singingResultQueue := mqManager.NewMessageQueue(event.SigningResultQueueName)
 	defer singingResultQueue.Close()
-	reshareResultQueue := mqManager.NewMessageQueue(event.ReshareResultQueueName)
-	defer reshareResultQueue.Close()
+	resharingResultQueue := mqManager.NewMessageQueue(event.ResharingResultQueueName)
+	defer resharingResultQueue.Close()
 
 	logger.Info("Node is running", "ID", nodeID, "name", nodeName)
 
@@ -150,7 +150,7 @@ func runNode(cmd *cobra.Command, args []string) error {
 		pubsub,
 		genKeyResultQueue,
 		singingResultQueue,
-		reshareResultQueue,
+		resharingResultQueue,
 		identityStore,
 	)
 	eventConsumer.Run()

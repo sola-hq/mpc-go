@@ -16,7 +16,7 @@ import (
 	"github.com/fystack/mpcium/pkg/mpc/core"
 )
 
-type ecdsaKeygenSession struct {
+type keygenSession struct {
 	*core.PartySession
 	endCh chan *keygen.LocalPartySaveData
 }
@@ -35,7 +35,7 @@ func NewECDSAKeygenSession(
 	resultQueue messaging.MessageQueue,
 	identityStore identity.Store,
 ) core.KeyGenSession {
-	return &ecdsaKeygenSession{
+	return &keygenSession{
 		PartySession: &core.PartySession{
 			WalletID:           walletID,
 			PubSub:             pubSub,
@@ -70,7 +70,7 @@ func NewECDSAKeygenSession(
 	}
 }
 
-func (s *ecdsaKeygenSession) Init() {
+func (s *keygenSession) Init() {
 	logger.Infof("Initializing session with partyID: %s, peerIDs %s", s.GetPartyID(), s.GetPartyIDs())
 	ctx := tss.NewPeerContext(s.GetPartyIDs())
 	params := tss.NewParameters(tss.S256(), ctx, s.GetPartyID(), s.GetPartyCount(), s.Threshold)
@@ -78,7 +78,7 @@ func (s *ecdsaKeygenSession) Init() {
 	logger.Infof("[INITIALIZED] Initialized session successfully partyID: %s, peerIDs %s, walletID %s, threshold = %d", s.GetPartyID(), s.GetPartyIDs(), s.WalletID, s.Threshold)
 }
 
-func (s *ecdsaKeygenSession) GenerateKey(done func()) {
+func (s *keygenSession) GenerateKey(done func()) {
 	logger.Info("Starting to generate key ECDSA", "walletID", s.WalletID)
 	go func() {
 		if err := s.Party.Start(); err != nil {

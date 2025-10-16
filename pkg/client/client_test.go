@@ -170,7 +170,7 @@ func TestMPCClient_Resharing(t *testing.T) {
 
 	// Test signing part of Resharing
 	msg := &types.ResharingMessage{
-		SessionID:    "reshare-session-123",
+		SessionID:    "resharing-session-123",
 		NodeIDs:      []string{"node1", "node2", "node3"},
 		NewThreshold: 2,
 		KeyType:      types.KeyTypeSecp256k1,

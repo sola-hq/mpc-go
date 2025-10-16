@@ -25,13 +25,13 @@ type MPCClient interface {
 }
 
 type mpcClient struct {
-	signingBroker      messaging.MessageBroker
-	keygenBroker       messaging.MessageBroker
-	pubsub             messaging.PubSub
-	genKeyResultQueue  messaging.MessageQueue
-	signResultQueue    messaging.MessageQueue
-	reshareResultQueue messaging.MessageQueue
-	signer             Signer
+	signingBroker        messaging.MessageBroker
+	keygenBroker         messaging.MessageBroker
+	pubsub               messaging.PubSub
+	keygenResultQueue    messaging.MessageQueue
+	signingResultQueue   messaging.MessageQueue
+	resharingResultQueue messaging.MessageQueue
+	signer               Signer
 }
 
 // Options defines configuration options for creating a new MPCClient
@@ -79,21 +79,21 @@ func NewMPCClient(opts Options) MPCClient {
 	manager := messaging.NewNATsMessageQueueManager("mpc", []string{
 		event.KeygenResultTopic,
 		event.SigningResultTopic,
-		event.ReshareResultTopic,
+		event.ResharingResultTopic,
 	}, opts.NatsConn)
 
-	genKeySuccessQueue := manager.NewMessageQueue(event.KeygenResultQueueName)
-	signResultQueue := manager.NewMessageQueue(event.SigningResultQueueName)
-	reshareSuccessQueue := manager.NewMessageQueue(event.ReshareResultQueueName)
+	keygenResultQueue := manager.NewMessageQueue(event.KeygenResultQueueName)
+	signingResultQueue := manager.NewMessageQueue(event.SigningResultQueueName)
+	resharingResultQueue := manager.NewMessageQueue(event.ResharingResultQueueName)
 
 	return &mpcClient{
-		signingBroker:      signingBroker,
-		keygenBroker:       keygenBroker,
-		pubsub:             pubsub,
-		genKeyResultQueue:  genKeySuccessQueue,
-		signResultQueue:    signResultQueue,
-		reshareResultQueue: reshareSuccessQueue,
-		signer:             opts.Signer,
+		signingBroker:        signingBroker,
+		keygenBroker:         keygenBroker,
+		pubsub:               pubsub,
+		keygenResultQueue:    keygenResultQueue,
+		signingResultQueue:   signingResultQueue,
+		resharingResultQueue: resharingResultQueue,
+		signer:               opts.Signer,
 	}
 }
 
@@ -127,7 +127,7 @@ func (c *mpcClient) CreateWallet(walletID string) error {
 
 // The callback will be invoked whenever a wallet creation result is received.
 func (c *mpcClient) OnWalletCreationResult(callback func(event event.KeygenResultEvent)) error {
-	err := c.genKeyResultQueue.Dequeue(event.KeygenResultTopic, func(msg []byte) error {
+	err := c.keygenResultQueue.Dequeue(event.KeygenResultTopic, func(msg []byte) error {
 		var event event.KeygenResultEvent
 		err := json.Unmarshal(msg, &event)
 		if err != nil {
@@ -169,7 +169,7 @@ func (c *mpcClient) SignTransaction(msg *types.SignTxMessage) error {
 }
 
 func (c *mpcClient) OnSignResult(callback func(event event.SigningResultEvent)) error {
-	err := c.signResultQueue.Dequeue(event.SigningResultCompleteTopic, func(msg []byte) error {
+	err := c.signingResultQueue.Dequeue(event.SigningResultCompleteTopic, func(msg []byte) error {
 		var event event.SigningResultEvent
 		err := json.Unmarshal(msg, &event)
 		if err != nil {
@@ -203,7 +203,7 @@ func (c *mpcClient) Resharing(msg *types.ResharingMessage) error {
 		return fmt.Errorf("Resharing: marshal error: %w", err)
 	}
 
-	if err := c.pubsub.Publish(eventconsumer.MPCReshareEvent, bytes); err != nil {
+	if err := c.pubsub.Publish(eventconsumer.MPCResharingEvent, bytes); err != nil {
 		return fmt.Errorf("Resharing: publish error: %w", err)
 	}
 	return nil
@@ -211,15 +211,15 @@ func (c *mpcClient) Resharing(msg *types.ResharingMessage) error {
 
 func (c *mpcClient) OnResharingResult(callback func(event event.ResharingResultEvent)) error {
 
-	err := c.reshareResultQueue.Dequeue(event.ReshareResultTopic, func(msg []byte) error {
-		logger.Info("Received reshare success message", "raw", string(msg))
+	err := c.resharingResultQueue.Dequeue(event.ResharingResultTopic, func(msg []byte) error {
+		logger.Info("Received resharing success message", "raw", string(msg))
 		var event event.ResharingResultEvent
 		err := json.Unmarshal(msg, &event)
 		if err != nil {
-			logger.Error("Failed to unmarshal reshare success event", err, "raw", string(msg))
+			logger.Error("Failed to unmarshal resharing success event", err, "raw", string(msg))
 			return err
 		}
-		logger.Info("Deserialized reshare success event", "event", event)
+		logger.Info("Deserialized resharing success event", "event", event)
 		callback(event)
 		return nil
 	})

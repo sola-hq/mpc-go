@@ -187,29 +187,35 @@ func (sc *signingConsumer) handleSigningEvent(msg jetstream.Msg) {
 		return
 	}
 
-	// Poll for the reply message until timeout.
-	deadline := time.Now().Add(signingResponseTimeout)
-	for time.Now().Before(deadline) {
-		replyMsg, err := replySub.NextMsg(signingPollingInterval)
-		if err != nil {
-			// If timeout occurs, continue trying.
-			if err == nats.ErrTimeout {
-				continue
-			}
-			logger.Error("SigningConsumer: Error receiving reply message", err)
-			break
-		}
-		if replyMsg != nil {
-			logger.Info("SigningConsumer: Completed signing event; reply received")
-			if ackErr := msg.Ack(); ackErr != nil {
-				logger.Error("SigningConsumer: ACK failed", ackErr)
-			}
+	ctx, cancel := context.WithTimeout(context.Background(), signingResponseTimeout)
+	defer cancel()
+
+	for {
+		select {
+		case <-ctx.Done():
+			logger.Warn("SigningConsumer: Timeout waiting for signing event response")
+			_ = msg.Nak()
 			return
+		default:
+			replyMsg, err := replySub.NextMsg(signingPollingInterval)
+			if err != nil {
+				// If timeout occurs, continue trying.
+				if err == nats.ErrTimeout {
+					continue
+				}
+				logger.Error("SigningConsumer: Error receiving reply message", err)
+				_ = msg.Nak()
+				return
+			}
+			if replyMsg != nil {
+				logger.Info("SigningConsumer: Completed signing event; reply received")
+				if ackErr := msg.Ack(); ackErr != nil {
+					logger.Error("SigningConsumer: ACK failed", ackErr)
+				}
+				return
+			}
 		}
 	}
-
-	logger.Warn("SigningConsumer: Timeout waiting for signing event response")
-	_ = msg.Nak()
 }
 
 func (sc *signingConsumer) handleSigningError(signMsg types.SignTxMessage, errorCode event.ErrorCode, err error, sessionID string) {

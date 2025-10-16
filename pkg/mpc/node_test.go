@@ -3,6 +3,7 @@ package mpc
 import (
 	"testing"
 
+	"github.com/fystack/mpcium/pkg/mpc/core"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -11,7 +12,7 @@ func TestCreatePartyID_Structure(t *testing.T) {
 	keyType := "keygen"
 	version := 5
 
-	partyID := createPartyID(sessionID, keyType, version)
+	partyID := core.CreatePartyID(sessionID, keyType, version)
 
 	assert.NotNil(t, partyID)
 	// The party ID has a random UUID as the ID
@@ -27,12 +28,12 @@ func TestCreatePartyID_DifferentVersions(t *testing.T) {
 	keyType := "keygen"
 
 	// Test version 0 (backward compatible)
-	partyID0 := createPartyID(sessionID, keyType, BackwardCompatibleVersion)
+	partyID0 := core.CreatePartyID(sessionID, keyType, BackwardCompatibleVersion)
 	assert.NotNil(t, partyID0)
 	assert.Equal(t, keyType, partyID0.Moniker)
 
 	// Test version 1 (default)
-	partyID1 := createPartyID(sessionID, keyType, DefaultVersion)
+	partyID1 := core.CreatePartyID(sessionID, keyType, DefaultVersion)
 	assert.NotNil(t, partyID1)
 	assert.Equal(t, keyType, partyID1.Moniker)
 
@@ -42,12 +43,12 @@ func TestCreatePartyID_DifferentVersions(t *testing.T) {
 
 func TestCreatePartyID_EmptyValues(t *testing.T) {
 	// Test with empty session ID
-	partyID := createPartyID("", "keygen", 0)
+	partyID := core.CreatePartyID("", "keygen", 0)
 	assert.NotNil(t, partyID)
 	assert.Equal(t, "keygen", partyID.Moniker)
 
 	// Test with empty key type
-	partyID = createPartyID("session", "", 1)
+	partyID = core.CreatePartyID("session", "", 1)
 	assert.NotNil(t, partyID)
 	assert.Equal(t, "", partyID.Moniker)
 }
@@ -58,8 +59,8 @@ func TestCreatePartyID_UniqueIDs(t *testing.T) {
 	version := 1
 
 	// Create multiple party IDs with same parameters
-	partyID1 := createPartyID(sessionID, keyType, version)
-	partyID2 := createPartyID(sessionID, keyType, version)
+	partyID1 := core.CreatePartyID(sessionID, keyType, version)
+	partyID2 := core.CreatePartyID(sessionID, keyType, version)
 
 	// IDs should be different (random UUIDs)
 	assert.NotEqual(t, partyID1.Id, partyID2.Id, "Party IDs should have unique random IDs")

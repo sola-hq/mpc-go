@@ -16,16 +16,16 @@ import (
 	"github.com/fystack/mpcium/pkg/mpc/core"
 )
 
-type eddsaReshareSession struct {
+type resharingSession struct {
 	*core.PartySession
-	isNewParty    bool
-	oldPeerIDs    []string
-	newPeerIDs    []string
-	reshareParams *tss.ReSharingParameters
-	endCh         chan *keygen.LocalPartySaveData
+	isNewParty      bool
+	oldPeerIDs      []string
+	newPeerIDs      []string
+	resharingParams *tss.ReSharingParameters
+	endCh           chan *keygen.LocalPartySaveData
 }
 
-func NewEDDSAReshareSession(
+func NewEDDSAResharingSession(
 	walletID string,
 	pubSub messaging.PubSub,
 	direct messaging.DirectMessaging,
@@ -42,14 +42,14 @@ func NewEDDSAReshareSession(
 	newPeerIDs []string,
 	isNewParty bool,
 	version int,
-) core.ReshareSession {
+) core.ResharingSession {
 
 	realPartyIDs := oldPartyIDs
 	if isNewParty {
 		realPartyIDs = newPartyIDs
 	}
 
-	session := &core.PartySession{
+	partySession := &core.PartySession{
 		WalletID:           walletID,
 		PubSub:             pubSub,
 		Direct:             direct,
@@ -64,10 +64,10 @@ func NewEDDSAReshareSession(
 		KeyinfoStore:       keyinfoStore,
 		TopicComposer: &core.TopicComposer{
 			ComposeBroadcastTopic: func() string {
-				return fmt.Sprintf("reshare:broadcast:eddsa:%s", walletID)
+				return fmt.Sprintf("resharing:broadcast:eddsa:%s", walletID)
 			},
 			ComposeDirectTopic: func(fromID string, toID string) string {
-				return fmt.Sprintf("reshare:direct:eddsa:%s:%s:%s", fromID, toID, walletID)
+				return fmt.Sprintf("resharing:direct:eddsa:%s:%s:%s", fromID, toID, walletID)
 			},
 		},
 		ComposeKey: func(walletID string) string {
@@ -79,7 +79,7 @@ func NewEDDSAReshareSession(
 		IdentityStore: identityStore,
 	}
 
-	reshareParams := tss.NewReSharingParameters(
+	resharingParams := tss.NewReSharingParameters(
 		tss.Edwards(),
 		tss.NewPeerContext(oldPartyIDs),
 		tss.NewPeerContext(newPartyIDs),
@@ -95,13 +95,13 @@ func NewEDDSAReshareSession(
 		oldPeerIDs = append(oldPeerIDs, core.PartyIDToNodeID(partyId))
 	}
 
-	return &eddsaReshareSession{
-		PartySession:  session,
-		reshareParams: reshareParams,
-		isNewParty:    isNewParty,
-		oldPeerIDs:    oldPeerIDs,
-		newPeerIDs:    newPeerIDs,
-		endCh:         make(chan *keygen.LocalPartySaveData),
+	return &resharingSession{
+		PartySession:    partySession,
+		resharingParams: resharingParams,
+		isNewParty:      isNewParty,
+		oldPeerIDs:      oldPeerIDs,
+		newPeerIDs:      newPeerIDs,
+		endCh:           make(chan *keygen.LocalPartySaveData),
 	}
 }
 
@@ -109,7 +109,7 @@ func NewEDDSAReshareSession(
 // but are NOT part of the new committee after resharing.
 // These peers are still relevant during resharing because
 // they must send final share data to the new committee.
-func (s *eddsaReshareSession) GetLegacyCommitteePeers() []string {
+func (s *resharingSession) GetLegacyCommitteePeers() []string {
 	difference := func(A, B []string) []string {
 		seen := make(map[string]bool)
 		for _, b := range B {
@@ -127,7 +127,7 @@ func (s *eddsaReshareSession) GetLegacyCommitteePeers() []string {
 	return difference(s.oldPeerIDs, s.newPeerIDs)
 }
 
-func (s *eddsaReshareSession) Init() error {
+func (s *resharingSession) Init() error {
 	logger.Infof("Initializing eddsa resharing session with partyID: %s, peerIDs %s", s.SelfPartyID, s.PartyIDs)
 	var share keygen.LocalPartySaveData
 	if s.isNewParty {
@@ -139,14 +139,14 @@ func (s *eddsaReshareSession) Init() error {
 			return fmt.Errorf("failed to load old share data eddsa: %w", err)
 		}
 	}
-	s.Party = resharing.NewLocalParty(s.reshareParams, share, s.OutCh, s.endCh)
+	s.Party = resharing.NewLocalParty(s.resharingParams, share, s.OutCh, s.endCh)
 	logger.Infof("[INITIALIZED] Initialized eddsa resharing session successfully partyID: %s, peerIDs %s, walletID %s, oldThreshold = %d, newThreshold = %d",
-		s.SelfPartyID, s.PartyIDs, s.WalletID, s.Threshold, s.reshareParams.NewThreshold())
+		s.SelfPartyID, s.PartyIDs, s.WalletID, s.Threshold, s.resharingParams.NewThreshold())
 
 	return nil
 }
 
-func (s *eddsaReshareSession) Reshare(done func()) {
+func (s *resharingSession) Reshare(done func()) {
 	logger.Info("Starting resharing", "walletID", s.WalletID, "partyID", s.SelfPartyID)
 	go func() {
 		if err := s.Party.Start(); err != nil {
@@ -173,7 +173,7 @@ func (s *eddsaReshareSession) Reshare(done func()) {
 
 				keyInfo := keyinfo.KeyInfo{
 					ParticipantPeerIDs: s.newPeerIDs,
-					Threshold:          s.reshareParams.NewThreshold(),
+					Threshold:          s.resharingParams.NewThreshold(),
 					Version:            newVersion,
 				}
 

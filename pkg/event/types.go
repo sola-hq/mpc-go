@@ -84,9 +84,9 @@ const (
 	ErrorCodeConcurrencyLimit  ErrorCode = "ERROR_CONCURRENCY_LIMIT"
 
 	// Operation-specific errors
-	ErrorCodeKeygenFailure  ErrorCode = "ERROR_KEYGEN_FAILURE"
-	ErrorCodeSigningFailure ErrorCode = "ERROR_SIGNING_FAILURE"
-	ErrorCodeReshareFailure ErrorCode = "ERROR_RESHARE_FAILURE"
+	ErrorCodeKeygenFailure    ErrorCode = "ERROR_KEYGEN_FAILURE"
+	ErrorCodeSigningFailure   ErrorCode = "ERROR_SIGNING_FAILURE"
+	ErrorCodeResharingFailure ErrorCode = "ERROR_RESHARING_FAILURE"
 
 	// Context and cancellation errors
 	ErrorCodeContextCancelled ErrorCode = "ERROR_CONTEXT_CANCELLED"

@@ -165,6 +165,6 @@ func GetEcdsaMsgRound(msg []byte, partyID *tss.PartyID, isBroadcast bool) (core.
 	}
 }
 
-func IsReshareRound(roundMsg string) bool {
+func IsResharingRound(roundMsg string) bool {
 	return roundMsg == KEYRESHARING1Unicast || roundMsg == KEYRESHARING2aUnicast || roundMsg == KEYRESHARING2bUnicast || roundMsg == KEYRESHARING3aUnicast || roundMsg == KEYRESHARING3b || roundMsg == KEYRESHARING4a || roundMsg == KEYRESHARING4bUnicast
 }
