@@ -10,6 +10,7 @@ import (
 	"github.com/fystack/mpcium/pkg/logger"
 	"github.com/fystack/mpcium/pkg/messaging"
 	"github.com/fystack/mpcium/pkg/mpc"
+	"github.com/fystack/mpcium/pkg/mpc/core"
 	"github.com/fystack/mpcium/pkg/types"
 	"github.com/google/uuid"
 	"github.com/nats-io/nats.go"
@@ -231,7 +232,7 @@ func (sc *signingConsumer) handleSigningError(signMsg types.SignTxMessage, error
 	}
 
 	err = sc.signingResultQueue.Enqueue(event.SigningResultCompleteTopic, signingResultBytes, &messaging.EnqueueOptions{
-		IdempotentKey: buildIdempotentKey(signMsg.TxID, sessionID, mpc.TypeSigningResultFmt),
+		IdempotentKey: buildIdempotentKey(signMsg.TxID, sessionID, core.TypeSigningResultFmt),
 	})
 	if err != nil {
 		logger.Error("Failed to enqueue signing result event", err,

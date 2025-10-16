@@ -11,6 +11,7 @@ import (
 	"github.com/fystack/mpcium/pkg/logger"
 	"github.com/fystack/mpcium/pkg/messaging"
 	"github.com/fystack/mpcium/pkg/mpc"
+	"github.com/fystack/mpcium/pkg/mpc/core"
 	"github.com/fystack/mpcium/pkg/types"
 	"github.com/google/uuid"
 	"github.com/nats-io/nats.go"
@@ -207,9 +208,9 @@ func (sc *keygenConsumer) handleKeygenError(keygenMsg types.GenerateKeyMessage, 
 		return
 	}
 
-	topic := fmt.Sprintf(mpc.TypeGenerateWalletResultFmt, keygenResult.WalletID)
+	topic := fmt.Sprintf(core.TypeGenerateWalletResultFmt, keygenResult.WalletID)
 	err = sc.keygenResultQueue.Enqueue(topic, keygenResultBytes, &messaging.EnqueueOptions{
-		IdempotentKey: buildIdempotentKey(keygenMsg.WalletID, sessionID, mpc.TypeGenerateWalletResultFmt),
+		IdempotentKey: buildIdempotentKey(keygenMsg.WalletID, sessionID, core.TypeGenerateWalletResultFmt),
 	})
 	if err != nil {
 		logger.Error("Failed to enqueue keygen result event", err,

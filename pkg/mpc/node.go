@@ -14,6 +14,9 @@ import (
 	"github.com/fystack/mpcium/pkg/kvstore"
 	"github.com/fystack/mpcium/pkg/logger"
 	"github.com/fystack/mpcium/pkg/messaging"
+	"github.com/fystack/mpcium/pkg/mpc/core"
+	"github.com/fystack/mpcium/pkg/mpc/ecdsa"
+	"github.com/fystack/mpcium/pkg/mpc/eddsa"
 )
 
 const (
@@ -77,11 +80,11 @@ func (p *Node) ID() string {
 }
 
 func (p *Node) CreateKeyGenSession(
-	sessionType SessionType,
+	sessionType core.SessionType,
 	walletID string,
 	threshold int,
 	resultQueue messaging.MessageQueue,
-) (KeyGenSession, error) {
+) (core.KeyGenSession, error) {
 	if !p.peerRegistry.ArePeersReady() {
 		return nil, errors.New("All nodes are not ready!")
 	}
@@ -92,19 +95,19 @@ func (p *Node) CreateKeyGenSession(
 	}
 
 	switch sessionType {
-	case SessionTypeECDSA:
+	case core.SessionTypeECDSA:
 		return p.createECDSAKeyGenSession(walletID, threshold, DefaultVersion, resultQueue)
-	case SessionTypeEDDSA:
+	case core.SessionTypeEDDSA:
 		return p.createEDDSAKeyGenSession(walletID, threshold, DefaultVersion, resultQueue)
 	default:
 		return nil, fmt.Errorf("unknown session type: %s", sessionType)
 	}
 }
 
-func (p *Node) createECDSAKeyGenSession(walletID string, threshold int, version int, resultQueue messaging.MessageQueue) (KeyGenSession, error) {
+func (p *Node) createECDSAKeyGenSession(walletID string, threshold int, version int, resultQueue messaging.MessageQueue) (core.KeyGenSession, error) {
 	readyPeerIDs := p.peerRegistry.GetReadyPeersIncludeSelf()
 	selfPartyID, allPartyIDs := p.generatePartyIDs(PurposeKeygen, readyPeerIDs, version)
-	session := newECDSAKeygenSession(
+	session := ecdsa.NewECDSAKeygenSession(
 		walletID,
 		p.pubSub,
 		p.direct,
@@ -121,10 +124,10 @@ func (p *Node) createECDSAKeyGenSession(walletID string, threshold int, version 
 	return session, nil
 }
 
-func (p *Node) createEDDSAKeyGenSession(walletID string, threshold int, version int, resultQueue messaging.MessageQueue) (KeyGenSession, error) {
+func (p *Node) createEDDSAKeyGenSession(walletID string, threshold int, version int, resultQueue messaging.MessageQueue) (core.KeyGenSession, error) {
 	readyPeerIDs := p.peerRegistry.GetReadyPeersIncludeSelf()
 	selfPartyID, allPartyIDs := p.generatePartyIDs(PurposeKeygen, readyPeerIDs, version)
-	session := newEDDSAKeygenSession(
+	session := eddsa.NewEDDSAKeygenSession(
 		walletID,
 		p.pubSub,
 		p.direct,
@@ -141,13 +144,13 @@ func (p *Node) createEDDSAKeyGenSession(walletID string, threshold int, version 
 }
 
 func (p *Node) CreateSigningSession(
-	sessionType SessionType,
+	sessionType core.SessionType,
 	walletID string,
 	txID string,
 	networkInternalCode string,
 	resultQueue messaging.MessageQueue,
 	idempotentKey string,
-) (SigningSession, error) {
+) (core.SigningSession, error) {
 	version := p.getVersion(sessionType, walletID)
 	keyInfo, err := p.getKeyInfo(sessionType, walletID)
 	if err != nil {
@@ -177,8 +180,8 @@ func (p *Node) CreateSigningSession(
 	selfPartyID, allPartyIDs := p.generatePartyIDs(PurposeKeygen, readyParticipantIDs, version)
 
 	switch sessionType {
-	case SessionTypeECDSA:
-		return newECDSASigningSession(
+	case core.SessionTypeECDSA:
+		return ecdsa.NewECDSASigningSession(
 			walletID,
 			txID,
 			networkInternalCode,
@@ -196,8 +199,8 @@ func (p *Node) CreateSigningSession(
 			idempotentKey,
 		), nil
 
-	case SessionTypeEDDSA:
-		return newEDDSASigningSession(
+	case core.SessionTypeEDDSA:
+		return eddsa.NewEDDSASigningSession(
 			walletID,
 			txID,
 			networkInternalCode,
@@ -218,12 +221,12 @@ func (p *Node) CreateSigningSession(
 	return nil, errors.New("unknown session type")
 }
 
-func (p *Node) getKeyInfo(sessionType SessionType, walletID string) (*keyinfo.KeyInfo, error) {
+func (p *Node) getKeyInfo(sessionType core.SessionType, walletID string) (*keyinfo.KeyInfo, error) {
 	var keyID string
 	switch sessionType {
-	case SessionTypeECDSA:
+	case core.SessionTypeECDSA:
 		keyID = fmt.Sprintf("ecdsa:%s", walletID)
-	case SessionTypeEDDSA:
+	case core.SessionTypeEDDSA:
 		keyID = fmt.Sprintf("eddsa:%s", walletID)
 	default:
 		return nil, errors.New("unsupported session type")
@@ -245,19 +248,19 @@ func (p *Node) getReadyPeersForSession(keyInfo *keyinfo.KeyInfo, readyPeers []st
 
 func (p *Node) ensureNodeIsParticipant(keyInfo *keyinfo.KeyInfo) error {
 	if !slices.Contains(keyInfo.ParticipantPeerIDs, p.nodeID) {
-		return ErrNotInParticipantList
+		return core.ErrNotInParticipantList
 	}
 	return nil
 }
 
 func (p *Node) CreateReshareSession(
-	sessionType SessionType,
+	sessionType core.SessionType,
 	walletID string,
 	newThreshold int,
 	newPeerIDs []string,
 	isNewPeer bool,
 	resultQueue messaging.MessageQueue,
-) (ReshareSession, error) {
+) (core.ReshareSession, error) {
 	// 1. Check peer readiness
 	count := p.peerRegistry.GetReadyPeersCount()
 	if count < int64(newThreshold)+1 {
@@ -344,7 +347,7 @@ func (p *Node) CreateReshareSession(
 	}
 
 	switch sessionType {
-	case SessionTypeECDSA:
+	case core.SessionTypeECDSA:
 		preParams := p.ecdsaPreParams[0]
 		if isNewPeer {
 			preParams = p.ecdsaPreParams[1]
@@ -353,7 +356,7 @@ func (p *Node) CreateReshareSession(
 			participantPeerIDs = oldKeyInfo.ParticipantPeerIDs
 		}
 
-		return NewECDSAReshareSession(
+		return ecdsa.NewECDSAReshareSession(
 			walletID,
 			p.pubSub,
 			p.direct,
@@ -373,8 +376,8 @@ func (p *Node) CreateReshareSession(
 			oldKeyInfo.Version,
 		), nil
 
-	case SessionTypeEDDSA:
-		return NewEDDSAReshareSession(
+	case core.SessionTypeEDDSA:
+		return eddsa.NewEDDSAReshareSession(
 			walletID,
 			p.pubSub,
 			p.direct,
@@ -443,12 +446,12 @@ func (p *Node) generatePreParams() []*keygen.LocalPreParams {
 	return preParams
 }
 
-func (p *Node) getVersion(sessionType SessionType, walletID string) int {
+func (p *Node) getVersion(sessionType core.SessionType, walletID string) int {
 	var composeKey string
 	switch sessionType {
-	case SessionTypeECDSA:
+	case core.SessionTypeECDSA:
 		composeKey = fmt.Sprintf("ecdsa:%s", walletID)
-	case SessionTypeEDDSA:
+	case core.SessionTypeEDDSA:
 		composeKey = fmt.Sprintf("eddsa:%s", walletID)
 	default:
 		logger.Fatal("Unknown session type", errors.New("Unknown session type"))
@@ -461,11 +464,11 @@ func (p *Node) getVersion(sessionType SessionType, walletID string) int {
 	return keyinfo.Version
 }
 
-func sessionKeyPrefix(sessionType SessionType) (string, error) {
+func sessionKeyPrefix(sessionType core.SessionType) (string, error) {
 	switch sessionType {
-	case SessionTypeECDSA:
+	case core.SessionTypeECDSA:
 		return "ecdsa", nil
-	case SessionTypeEDDSA:
+	case core.SessionTypeEDDSA:
 		return "eddsa", nil
 	default:
 		return "", fmt.Errorf("unsupported session type: %v", sessionType)

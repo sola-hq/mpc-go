@@ -1,4 +1,4 @@
-package mpc
+package ecdsa
 
 import (
 	"crypto/ecdsa"
@@ -14,18 +14,11 @@ import (
 	"github.com/fystack/mpcium/pkg/kvstore"
 	"github.com/fystack/mpcium/pkg/logger"
 	"github.com/fystack/mpcium/pkg/messaging"
+	"github.com/fystack/mpcium/pkg/mpc/core"
 )
 
-type ReshareSession interface {
-	Session
-	Init() error
-	Reshare(done func())
-	GetPubKeyResult() []byte
-	GetLegacyCommitteePeers() []string
-}
-
 type ecdsaReshareSession struct {
-	*session
+	*core.PartySession
 	isNewParty    bool
 	oldPeerIDs    []string
 	newPeerIDs    []string
@@ -51,28 +44,28 @@ func NewECDSAReshareSession(
 	newPeerIDs []string,
 	isNewParty bool,
 	version int,
-) *ecdsaReshareSession {
+) core.ReshareSession {
 
 	realPartyIDs := oldPartyIDs
 	if isNewParty {
 		realPartyIDs = newPartyIDs
 	}
 
-	session := session{
-		walletID:           walletID,
-		pubSub:             pubSub,
-		direct:             direct,
-		threshold:          threshold,
-		participantPeerIDs: participantPeerIDs,
-		selfPartyID:        selfID,
-		partyIDs:           realPartyIDs,
-		outCh:              make(chan tss.Message),
+	session := &core.PartySession{
+		WalletID:           walletID,
+		PubSub:             pubSub,
+		Direct:             direct,
+		Threshold:          threshold,
+		ParticipantPeerIDs: participantPeerIDs,
+		SelfPartyID:        selfID,
+		PartyIDs:           realPartyIDs,
+		OutCh:              make(chan tss.Message),
 		ErrCh:              make(chan error),
-		preParams:          preParams,
-		kvstore:            kvstore,
-		keyinfoStore:       keyinfoStore,
-		version:            version,
-		topicComposer: &TopicComposer{
+		PreParams:          preParams,
+		Kvstore:            kvstore,
+		KeyinfoStore:       keyinfoStore,
+		Version:            version,
+		TopicComposer: &core.TopicComposer{
 			ComposeBroadcastTopic: func() string {
 				return fmt.Sprintf("resharing:broadcast:ecdsa:%s", walletID)
 			},
@@ -80,13 +73,13 @@ func NewECDSAReshareSession(
 				return fmt.Sprintf("resharing:direct:ecdsa:%s:%s:%s", fromID, toID, walletID)
 			},
 		},
-		composeKey: func(walletID string) string {
+		ComposeKey: func(walletID string) string {
 			return fmt.Sprintf("ecdsa:%s", walletID)
 		},
-		getRoundFunc:  GetEcdsaMsgRound,
-		resultQueue:   resultQueue,
-		sessionType:   SessionTypeECDSA,
-		identityStore: identityStore,
+		GetRoundFunc:  GetEcdsaMsgRound,
+		ResultQueue:   resultQueue,
+		SessionType:   core.SessionTypeECDSA,
+		IdentityStore: identityStore,
 	}
 	reshareParams := tss.NewReSharingParameters(
 		tss.S256(),
@@ -101,11 +94,11 @@ func NewECDSAReshareSession(
 
 	var oldPeerIDs []string
 	for _, partyId := range oldPartyIDs {
-		oldPeerIDs = append(oldPeerIDs, partyIDToNodeID(partyId))
+		oldPeerIDs = append(oldPeerIDs, core.PartyIDToNodeID(partyId))
 	}
 
 	return &ecdsaReshareSession{
-		session:       &session,
+		PartySession:  session,
 		reshareParams: reshareParams,
 		isNewParty:    isNewParty,
 		oldPeerIDs:    oldPeerIDs,
@@ -137,31 +130,31 @@ func (s *ecdsaReshareSession) GetLegacyCommitteePeers() []string {
 }
 
 func (s *ecdsaReshareSession) Init() error {
-	logger.Infof("Initializing ecdsa resharing session with partyID: %s, newPartyIDs %s", s.selfPartyID, s.partyIDs)
+	logger.Infof("Initializing ecdsa resharing session with partyID: %s, newPartyIDs %s", s.GetPartyID(), s.GetPartyIDs())
 	var share keygen.LocalPartySaveData
 
 	if s.isNewParty {
 		// New party → generate empty share
-		share = keygen.NewLocalPartySaveData(len(s.partyIDs))
-		share.LocalPreParams = *s.preParams
+		share = keygen.NewLocalPartySaveData(s.GetPartyCount())
+		share.LocalPreParams = *s.PreParams
 	} else {
-		err := s.loadOldShareDataGeneric(s.walletID, s.GetVersion(), &share)
+		err := s.LoadOldShareDataGeneric(s.WalletID, s.GetVersion(), &share)
 		if err != nil {
 			return fmt.Errorf("failed to load old share data ecdsa: %w", err)
 		}
 	}
 
-	s.party = resharing.NewLocalParty(s.reshareParams, share, s.outCh, s.endCh)
+	s.Party = resharing.NewLocalParty(s.reshareParams, share, s.OutCh, s.endCh)
 
 	logger.Infof("[INITIALIZED] Initialized resharing session successfully partyID: %s, peerIDs %s, walletID %s, oldThreshold = %d, newThreshold = %d",
-		s.selfPartyID, s.partyIDs, s.walletID, s.threshold, s.reshareParams.NewThreshold())
+		s.GetPartyID(), s.GetPartyIDs(), s.WalletID, s.Threshold, s.reshareParams.NewThreshold())
 	return nil
 }
 
 func (s *ecdsaReshareSession) Reshare(done func()) {
-	logger.Info("Starting resharing", "walletID", s.walletID, "partyID", s.selfPartyID)
+	logger.Info("Starting resharing", "walletID", s.WalletID, "partyID", s.SelfPartyID)
 	go func() {
-		if err := s.party.Start(); err != nil {
+		if err := s.Party.Start(); err != nil {
 			s.ErrCh <- err
 		}
 	}()
@@ -179,8 +172,8 @@ func (s *ecdsaReshareSession) Reshare(done func()) {
 				}
 
 				newVersion := s.GetVersion() + 1
-				key := s.composeKey(walletIDWithVersion(s.walletID, newVersion))
-				if err := s.kvstore.Put(key, keyBytes); err != nil {
+				key := s.ComposeKey(core.WalletIDWithVersion(s.WalletID, newVersion))
+				if err := s.Kvstore.Put(key, keyBytes); err != nil {
 					s.ErrCh <- err
 					return
 				}
@@ -192,7 +185,7 @@ func (s *ecdsaReshareSession) Reshare(done func()) {
 				}
 
 				// Save key info with resharing flag
-				if err := s.keyinfoStore.Save(s.composeKey(s.walletID), &keyInfo); err != nil {
+				if err := s.KeyinfoStore.Save(s.ComposeKey(s.WalletID), &keyInfo); err != nil {
 					s.ErrCh <- err
 					return
 				}
@@ -212,9 +205,9 @@ func (s *ecdsaReshareSession) Reshare(done func()) {
 				}
 
 				// Set the public key bytes
-				s.pubkeyBytes = pubKeyBytes
+				s.PubkeyBytes = pubKeyBytes
 				logger.Info("Generated public key bytes",
-					"walletID", s.walletID,
+					"walletID", s.WalletID,
 					"pubKeyBytes", pubKeyBytes)
 			}
 
@@ -224,9 +217,9 @@ func (s *ecdsaReshareSession) Reshare(done func()) {
 				logger.Error("Failed to close session", err)
 			}
 			return
-		case msg := <-s.outCh:
+		case msg := <-s.OutCh:
 			// Handle the message
-			s.handleTssMessage(msg)
+			s.HandleTssMessage(msg)
 		}
 	}
 }

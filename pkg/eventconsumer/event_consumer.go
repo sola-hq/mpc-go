@@ -15,6 +15,7 @@ import (
 	"github.com/fystack/mpcium/pkg/logger"
 	"github.com/fystack/mpcium/pkg/messaging"
 	"github.com/fystack/mpcium/pkg/mpc"
+	"github.com/fystack/mpcium/pkg/mpc/core"
 	"github.com/fystack/mpcium/pkg/types"
 	"github.com/nats-io/nats.go"
 	"github.com/spf13/viper"
@@ -167,12 +168,12 @@ func (ec *eventConsumer) handleKeyGenEvent(natMsg *nats.Msg) {
 	}
 
 	walletID := msg.WalletID
-	ecdsaSession, err := ec.node.CreateKeyGenSession(mpc.SessionTypeECDSA, walletID, ec.mpcThreshold, ec.genKeyResultQueue)
+	ecdsaSession, err := ec.node.CreateKeyGenSession(core.SessionTypeECDSA, walletID, ec.mpcThreshold, ec.genKeyResultQueue)
 	if err != nil {
 		ec.handleKeygenSessionError(walletID, err, "Failed to create ECDSA key generation session", natMsg)
 		return
 	}
-	eddsaSession, err := ec.node.CreateKeyGenSession(mpc.SessionTypeEDDSA, walletID, ec.mpcThreshold, ec.genKeyResultQueue)
+	eddsaSession, err := ec.node.CreateKeyGenSession(core.SessionTypeEDDSA, walletID, ec.mpcThreshold, ec.genKeyResultQueue)
 	if err != nil {
 		ec.handleKeygenSessionError(walletID, err, "Failed to create EdDSA key generation session", natMsg)
 		return
@@ -195,7 +196,7 @@ func (ec *eventConsumer) handleKeyGenEvent(natMsg *nats.Msg) {
 		select {
 		case <-ctxEcdsa.Done():
 			successEvent.ECDSAPubKey = ecdsaSession.GetPubKeyResult()
-		case err := <-ecdsaSession.ErrChan():
+		case err := <-ecdsaSession.GetErrChan():
 			logger.Error("ECDSA keygen session error", err)
 			ec.handleKeygenSessionError(walletID, err, "ECDSA keygen session error", natMsg)
 			errorChan <- err
@@ -207,7 +208,7 @@ func (ec *eventConsumer) handleKeyGenEvent(natMsg *nats.Msg) {
 		select {
 		case <-ctxEddsa.Done():
 			successEvent.EDDSAPubKey = eddsaSession.GetPubKeyResult()
-		case err := <-eddsaSession.ErrChan():
+		case err := <-eddsaSession.GetErrChan():
 			logger.Error("EdDSA keygen session error", err)
 			ec.handleKeygenSessionError(walletID, err, "EdDSA keygen session error", natMsg)
 			errorChan <- err
@@ -254,7 +255,7 @@ func (ec *eventConsumer) handleKeyGenEvent(natMsg *nats.Msg) {
 		return
 	}
 
-	key := fmt.Sprintf(mpc.TypeGenerateWalletResultFmt, walletID)
+	key := fmt.Sprintf(core.TypeGenerateWalletResultFmt, walletID)
 	if err := ec.genKeyResultQueue.Enqueue(
 		key,
 		payload,
@@ -287,7 +288,7 @@ func (ec *eventConsumer) handleKeygenSessionError(walletID string, err error, co
 		return
 	}
 
-	key := fmt.Sprintf(mpc.TypeGenerateWalletResultFmt, walletID)
+	key := fmt.Sprintf(core.TypeGenerateWalletResultFmt, walletID)
 	err = ec.genKeyResultQueue.Enqueue(key, keygenResultBytes, &messaging.EnqueueOptions{
 		IdempotentKey: composeKeygenIdempotentKey(walletID, natMsg),
 	})
@@ -379,13 +380,13 @@ func (ec *eventConsumer) handleSigningEvent(natMsg *nats.Msg) {
 		return
 	}
 
-	var session mpc.SigningSession
+	var session core.SigningSession
 	idempotentKey := composeSigningIdempotentKey(msg.TxID, natMsg)
 	var sessionErr error
 	switch msg.KeyType {
 	case types.KeyTypeSecp256k1:
 		session, sessionErr = ec.node.CreateSigningSession(
-			mpc.SessionTypeECDSA,
+			core.SessionTypeECDSA,
 			msg.WalletID,
 			msg.TxID,
 			msg.NetworkInternalCode,
@@ -394,7 +395,7 @@ func (ec *eventConsumer) handleSigningEvent(natMsg *nats.Msg) {
 		)
 	case types.KeyTypeEd25519:
 		session, sessionErr = ec.node.CreateSigningSession(
-			mpc.SessionTypeEDDSA,
+			core.SessionTypeEDDSA,
 			msg.WalletID,
 			msg.TxID,
 			msg.NetworkInternalCode,
@@ -405,7 +406,7 @@ func (ec *eventConsumer) handleSigningEvent(natMsg *nats.Msg) {
 		sessionErr = fmt.Errorf("unsupported key type: %v", msg.KeyType)
 	}
 	if sessionErr != nil {
-		if errors.Is(sessionErr, mpc.ErrNotEnoughParticipants) {
+		if errors.Is(sessionErr, core.ErrNotEnoughParticipants) {
 			logger.Info(
 				"RETRY LATER: Not enough participants to sign",
 				"walletID", msg.WalletID,
@@ -416,7 +417,7 @@ func (ec *eventConsumer) handleSigningEvent(natMsg *nats.Msg) {
 			return
 		}
 
-		if errors.Is(sessionErr, mpc.ErrNotInParticipantList) {
+		if errors.Is(sessionErr, core.ErrNotInParticipantList) {
 			logger.Info("Node is not in participant list for this wallet, skipping signing",
 				"walletID", msg.WalletID,
 				"txID", msg.TxID,
@@ -460,7 +461,7 @@ func (ec *eventConsumer) handleSigningEvent(natMsg *nats.Msg) {
 			select {
 			case <-ctx.Done():
 				return
-			case err := <-session.ErrChan():
+			case err := <-session.GetErrChan():
 				if err != nil {
 					ec.handleSigningSessionError(
 						msg.WalletID,
@@ -600,7 +601,7 @@ func (ec *eventConsumer) consumeReshareEvent() error {
 			return
 		}
 
-		createSession := func(isNewPeer bool) (mpc.ReshareSession, error) {
+		createSession := func(isNewPeer bool) (core.ReshareSession, error) {
 			return ec.node.CreateReshareSession(
 				sessionType,
 				walletID,
@@ -674,7 +675,7 @@ func (ec *eventConsumer) consumeReshareEvent() error {
 					select {
 					case <-ctxOld.Done():
 						return
-					case err := <-oldSession.ErrChan():
+					case err := <-oldSession.GetErrChan():
 						logger.Error("Old reshare session error", err)
 						ec.handleReshareSessionError(walletID, keyType, msg.NewThreshold, err, "Old reshare session error", natMsg)
 						doneOld()
@@ -695,7 +696,7 @@ func (ec *eventConsumer) consumeReshareEvent() error {
 					case <-ctxNew.Done():
 						successEvent.PubKey = newSession.GetPubKeyResult()
 						return
-					case err := <-newSession.ErrChan():
+					case err := <-newSession.GetErrChan():
 						logger.Error("New reshare session error", err)
 						ec.handleReshareSessionError(walletID, keyType, msg.NewThreshold, err, "New reshare session error", natMsg)
 						doneNew()
@@ -716,7 +717,7 @@ func (ec *eventConsumer) consumeReshareEvent() error {
 				return
 			}
 
-			key := fmt.Sprintf(mpc.TypeReshareWalletResultFmt, msg.SessionID)
+			key := fmt.Sprintf(core.TypeReshareWalletResultFmt, msg.SessionID)
 			err = ec.reshareResultQueue.Enqueue(
 				key,
 				successBytes,
@@ -776,7 +777,7 @@ func (ec *eventConsumer) handleReshareSessionError(
 		return
 	}
 
-	key := fmt.Sprintf(mpc.TypeReshareWalletResultFmt, walletID)
+	key := fmt.Sprintf(core.TypeReshareWalletResultFmt, walletID)
 	err = ec.reshareResultQueue.Enqueue(key, reshareResultBytes, &messaging.EnqueueOptions{
 		IdempotentKey: composeReshareIdempotentKey(walletID, natMsg),
 	})
@@ -867,12 +868,12 @@ func (ec *eventConsumer) Close() error {
 	return nil
 }
 
-func sessionTypeFromKeyType(keyType types.KeyType) (mpc.SessionType, error) {
+func sessionTypeFromKeyType(keyType types.KeyType) (core.SessionType, error) {
 	switch keyType {
 	case types.KeyTypeSecp256k1:
-		return mpc.SessionTypeECDSA, nil
+		return core.SessionTypeECDSA, nil
 	case types.KeyTypeEd25519:
-		return mpc.SessionTypeEDDSA, nil
+		return core.SessionTypeEDDSA, nil
 	default:
 		logger.Warn("Unsupported key type", "keyType", keyType)
 		return "", fmt.Errorf("unsupported key type: %v", keyType)
@@ -892,13 +893,13 @@ func composeIdempotentKey(baseID string, natMsg *nats.Msg, formatTemplate string
 }
 
 func composeKeygenIdempotentKey(walletID string, natMsg *nats.Msg) string {
-	return composeIdempotentKey(walletID, natMsg, mpc.TypeGenerateWalletResultFmt)
+	return composeIdempotentKey(walletID, natMsg, core.TypeGenerateWalletResultFmt)
 }
 
 func composeSigningIdempotentKey(txID string, natMsg *nats.Msg) string {
-	return composeIdempotentKey(txID, natMsg, mpc.TypeSigningResultFmt)
+	return composeIdempotentKey(txID, natMsg, core.TypeSigningResultFmt)
 }
 
 func composeReshareIdempotentKey(sessionID string, natMsg *nats.Msg) string {
-	return composeIdempotentKey(sessionID, natMsg, mpc.TypeReshareWalletResultFmt)
+	return composeIdempotentKey(sessionID, natMsg, core.TypeReshareWalletResultFmt)
 }

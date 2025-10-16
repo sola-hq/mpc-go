@@ -1,8 +1,9 @@
-package mpc
+package core
 
 import (
 	"encoding/json"
 	"fmt"
+	"math/big"
 	"strings"
 	"sync"
 
@@ -27,6 +28,9 @@ const (
 
 	SessionTypeECDSA SessionType = "session_ecdsa"
 	SessionTypeEDDSA SessionType = "session_eddsa"
+
+	BackwardCompatibleVersion int = 0
+	DefaultVersion            int = 1
 )
 
 var (
@@ -44,74 +48,99 @@ type KeyComposerFn func(id string) string
 type Session interface {
 	ListenToIncomingMessageAsync()
 	ListenToPeersAsync(peerIDs []string)
-	ErrChan() <-chan error
+	GetErrChan() <-chan error
+	Close() error
+	GetPubKeyResult() []byte
+	GetVersion() int
+	GetPartyID() *tss.PartyID
+	GetPartyIDs() []*tss.PartyID
+	GetPartyCount() int
 }
 
-type session struct {
-	walletID string
-	pubSub   messaging.PubSub
-	direct   messaging.DirectMessaging
+type KeyGenSession interface {
+	Session
+	Init()
+	GenerateKey(done func())
+}
 
-	threshold          int
-	participantPeerIDs []string
-	selfPartyID        *tss.PartyID
+type SigningSession interface {
+	Session
+	Init(tx *big.Int) error
+	Sign(onSuccess func(data []byte))
+}
+
+type ReshareSession interface {
+	Session
+	Init() error
+	Reshare(done func())
+	GetLegacyCommitteePeers() []string
+}
+
+type PartySession struct {
+	WalletID string
+	PubSub   messaging.PubSub
+	Direct   messaging.DirectMessaging
+
+	Threshold          int
+	ParticipantPeerIDs []string
+	SelfPartyID        *tss.PartyID
 	// IDs of all parties in the session including self
-	partyIDs []*tss.PartyID
-	outCh    chan tss.Message
+	PartyIDs []*tss.PartyID
+	OutCh    chan tss.Message
 	ErrCh    chan error
-	party    tss.Party
-	version  int
+	Party    tss.Party
+	Version  int
 
-	// preParams is nil for EDDSA session
-	preParams    *keygen.LocalPreParams
-	kvstore      kvstore.KVStore
-	keyinfoStore keyinfo.Store
-	broadcastSub messaging.Subscription
-	directSubs   []messaging.Subscription
+	// PreParams is nil for EDDSA session
+	PreParams    *keygen.LocalPreParams
+	Kvstore      kvstore.KVStore
+	KeyinfoStore keyinfo.Store
+	BroadcastSub messaging.Subscription
+	DirectSubs   []messaging.Subscription
 
-	resultQueue   messaging.MessageQueue
-	identityStore identity.Store
+	ResultQueue   messaging.MessageQueue
+	IdentityStore identity.Store
 
-	topicComposer *TopicComposer
-	composeKey    KeyComposerFn
-	getRoundFunc  GetRoundFunc
-	mu            sync.Mutex
-	// After the session is done, the key will be stored pubkeyBytes
-	pubkeyBytes   []byte
-	sessionType   SessionType
-	idempotentKey string
+	TopicComposer *TopicComposer
+	ComposeKey    KeyComposerFn
+	GetRoundFunc  GetRoundFunc
+	Mu            sync.Mutex
+	// After the session is done, the key will be stored PubkeyBytes
+	PubkeyBytes   []byte
+	SessionType   SessionType
+	IdempotentKey string
 }
 
-func (s *session) PartyID() *tss.PartyID {
-	return s.selfPartyID
+func (s *PartySession) GetPartyID() *tss.PartyID {
+	return s.SelfPartyID
 }
 
-func (s *session) PartyIDs() []*tss.PartyID {
-	return s.partyIDs
+func (s *PartySession) GetPartyIDs() []*tss.PartyID {
+	return s.PartyIDs
 }
 
-func (s *session) PartyCount() int {
-	return len(s.partyIDs)
+func (s *PartySession) GetPartyCount() int {
+	return len(s.PartyIDs)
 }
 
 // update: use AEAD encryption for each message so NATs server learns nothing
-func (s *session) handleTssMessage(keyshare tss.Message) {
+func (s *PartySession) HandleTssMessage(keyshare tss.Message) {
 	data, routing, err := keyshare.WireBytes()
 	if err != nil {
 		s.ErrCh <- err
 		return
 	}
 
-	tssMsg := types.NewTssMessage(s.walletID, data, routing.IsBroadcast, routing.From, routing.To)
+	tssMsg := types.NewTssMessage(s.WalletID, data, routing.IsBroadcast, routing.From, routing.To)
 
 	toIDs := make([]string, len(routing.To))
 	for i, id := range routing.To {
 		toIDs[i] = id.String()
 	}
 	logger.Debug(
-		fmt.Sprintf("%s Sending message", s.sessionType),
+		fmt.Sprintf("%s Sending message", s.SessionType),
 		"from",
-		s.selfPartyID.String(),
+		s.SelfPartyID.String(),
 		"to",
 		toIDs,
 		"isBroadcast",
@@ -120,7 +149,7 @@ func (s *session) handleTssMessage(keyshare tss.Message) {
 
 	// Broadcast message
 	if routing.IsBroadcast && len(routing.To) == 0 {
-		signature, err := s.identityStore.SignMessage(&tssMsg) // attach signature
+		signature, err := s.IdentityStore.SignMessage(&tssMsg) // attach signature
 		if err != nil {
 			s.ErrCh <- fmt.Errorf("failed to sign message: %w", err)
 			return
@@ -132,7 +161,7 @@ func (s *session) handleTssMessage(keyshare tss.Message) {
 			return
 		}
 
-		err = s.pubSub.Publish(s.topicComposer.ComposeBroadcastTopic(), msg)
+		err = s.PubSub.Publish(s.TopicComposer.ComposeBroadcastTopic(), msg)
 		if err != nil {
 			s.ErrCh <- err
 			return
@@ -145,23 +174,23 @@ func (s *session) handleTssMessage(keyshare tss.Message) {
 			return
 		}
 
-		selfID := partyIDToNodeID(s.selfPartyID)
+		selfID := PartyIDToNodeID(s.SelfPartyID)
 		for _, to := range routing.To {
-			toNodeID := partyIDToNodeID(to)
-			topic := s.topicComposer.ComposeDirectTopic(selfID, toNodeID)
+			toNodeID := PartyIDToNodeID(to)
+			topic := s.TopicComposer.ComposeDirectTopic(selfID, toNodeID)
 			if selfID == toNodeID {
-				err := s.direct.SendToSelf(topic, msg)
+				err := s.Direct.SendToSelf(topic, msg)
 				if err != nil {
 					logger.Error("Failed in SendToSelf direct message", err, "topic", topic)
 					s.ErrCh <- fmt.Errorf("failed to send direct message to %s", topic)
 				}
 			} else {
-				cipher, err := s.identityStore.EncryptMessage(msg, toNodeID)
+				cipher, err := s.IdentityStore.EncryptMessage(msg, toNodeID)
 				if err != nil {
 					s.ErrCh <- fmt.Errorf("encrypt tss message error %w", err)
 					logger.Error("Encrypt tss message error", err, "topic", topic)
 				}
-				err = s.direct.SendToOther(topic, cipher)
+				err = s.Direct.SendToOther(topic, cipher)
 				if err != nil {
 					logger.Error("Failed in SendToOther direct message", err, "topic", topic)
 					s.ErrCh <- fmt.Errorf("failed to send direct message to %w", err)
@@ -171,7 +200,7 @@ func (s *session) handleTssMessage(keyshare tss.Message) {
 	}
 }
 
-func (s *session) receiveP2PTssMessage(topic string, cipher []byte) {
+func (s *PartySession) receiveP2PTssMessage(topic string, cipher []byte) {
 	senderID := extractSenderIDFromDirectTopic(topic)
 	if senderID == "" {
 		s.ErrCh <- fmt.Errorf("failed to extract senderID from direct topic: the direct topic format is wrong")
@@ -181,10 +210,10 @@ func (s *session) receiveP2PTssMessage(topic string, cipher []byte) {
 	var plaintext []byte
 	var err error
 
-	if senderID == partyIDToNodeID(s.selfPartyID) {
+	if senderID == PartyIDToNodeID(s.SelfPartyID) {
 		plaintext = cipher // to self, no decryption needed
 	} else {
-		plaintext, err = s.identityStore.DecryptMessage(cipher, senderID)
+		plaintext, err = s.IdentityStore.DecryptMessage(cipher, senderID)
 		if err != nil {
 			s.ErrCh <- fmt.Errorf("failed to decrypt message: %w, tampered message", err)
 			return
@@ -199,7 +228,7 @@ func (s *session) receiveP2PTssMessage(topic string, cipher []byte) {
 	s.receiveTssMessage(msg)
 }
 
-func (s *session) receiveBroadcastTssMessage(rawMsg []byte) {
+func (s *PartySession) receiveBroadcastTssMessage(rawMsg []byte) {
 
 	msg, err := types.UnmarshalTssMessage(rawMsg)
 	if err != nil {
@@ -207,7 +236,7 @@ func (s *session) receiveBroadcastTssMessage(rawMsg []byte) {
 		return
 	}
 
-	err = s.identityStore.VerifyMessage(msg)
+	err = s.IdentityStore.VerifyMessage(msg)
 	if err != nil {
 		s.ErrCh <- fmt.Errorf("failed to verify message: %w, tampered message", err)
 		return
@@ -217,13 +246,13 @@ func (s *session) receiveBroadcastTssMessage(rawMsg []byte) {
 }
 
 // update: the logic of receiving message should be modified
-func (s *session) receiveTssMessage(msg *types.TssMessage) {
+func (s *PartySession) receiveTssMessage(msg *types.TssMessage) {
 	toIDs := make([]string, len(msg.To))
 	for i, id := range msg.To {
 		toIDs[i] = id.String()
 	}
 
-	round, err := s.getRoundFunc(msg.MsgBytes, s.selfPartyID, msg.IsBroadcast)
+	round, err := s.GetRoundFunc(msg.MsgBytes, s.SelfPartyID, msg.IsBroadcast)
 	if err != nil {
 		s.ErrCh <- errors.Wrap(err, "Broken TSS Share")
 		return
@@ -239,84 +268,84 @@ func (s *session) receiveTssMessage(msg *types.TssMessage) {
 		"from",
 		msg.From.String(),
 		"self",
-		s.selfPartyID.String(),
+		s.SelfPartyID.String(),
 	)
 	isBroadcast := msg.IsBroadcast && len(msg.To) == 0
 	var isToSelf bool
 	for _, to := range msg.To {
-		if comparePartyIDs(to, s.selfPartyID) {
+		if ComparePartyIDs(to, s.SelfPartyID) {
 			isToSelf = true
 			break
 		}
 	}
 
 	if isBroadcast || isToSelf {
-		s.mu.Lock()
-		defer s.mu.Unlock()
-		ok, err := s.party.UpdateFromBytes(msg.MsgBytes, msg.From, msg.IsBroadcast)
+		s.Mu.Lock()
+		defer s.Mu.Unlock()
+		ok, err := s.Party.UpdateFromBytes(msg.MsgBytes, msg.From, msg.IsBroadcast)
 		if !ok || err != nil {
-			logger.Error("Failed to update party", err, "walletID", s.walletID)
+			logger.Error("Failed to update party", err, "walletID", s.WalletID)
 			return
 		}
 	}
 }
 
-func (s *session) subscribeDirectTopicAsync(topic string) error {
+func (s *PartySession) subscribeDirectTopicAsync(topic string) error {
 	t := topic // avoid capturing the changing loop variable
-	sub, err := s.direct.Listen(t, func(cipher []byte) {
+	sub, err := s.Direct.Listen(t, func(cipher []byte) {
 		// async to avoid timeouts in handlers
 		go s.receiveP2PTssMessage(t, cipher)
 	})
 	if err != nil {
 		return fmt.Errorf("failed to subscribe to direct topic %s: %w", t, err)
 	}
-	s.directSubs = append(s.directSubs, sub)
+	s.DirectSubs = append(s.DirectSubs, sub)
 	return nil
 }
 
-func (s *session) subscribeFromPeersAsync(fromIDs []string) {
-	toID := partyIDToNodeID(s.selfPartyID)
+func (s *PartySession) subscribeFromPeersAsync(fromIDs []string) {
+	toID := PartyIDToNodeID(s.SelfPartyID)
 	for _, fromID := range fromIDs {
-		topic := s.topicComposer.ComposeDirectTopic(fromID, toID)
+		topic := s.TopicComposer.ComposeDirectTopic(fromID, toID)
 		if err := s.subscribeDirectTopicAsync(topic); err != nil {
 			s.ErrCh <- err
 		}
 	}
 }
 
-func (s *session) subscribeBroadcastAsync() {
+func (s *PartySession) subscribeBroadcastAsync() {
 	go func() {
-		topic := s.topicComposer.ComposeBroadcastTopic()
-		sub, err := s.pubSub.Subscribe(topic, func(natMsg *nats.Msg) {
+		topic := s.TopicComposer.ComposeBroadcastTopic()
+		sub, err := s.PubSub.Subscribe(topic, func(natMsg *nats.Msg) {
 			s.receiveBroadcastTssMessage(natMsg.Data)
 		})
 		if err != nil {
 			s.ErrCh <- fmt.Errorf("failed to subscribe to broadcast topic %s: %w", topic, err)
 			return
 		}
-		s.broadcastSub = sub
+		s.BroadcastSub = sub
 	}()
 }
 
-func (s *session) ListenToIncomingMessageAsync() {
+func (s *PartySession) ListenToIncomingMessageAsync() {
 	// 1) broadcast
 	s.subscribeBroadcastAsync()
 
 	// 2) direct from peers in this session's partyIDs (includes self)
-	s.subscribeFromPeersAsync(partyIDsToNodeIDs(s.partyIDs))
+	s.subscribeFromPeersAsync(PartyIDsToNodeIDs(s.PartyIDs))
 }
 
-func (s *session) ListenToPeersAsync(peerIDs []string) {
+func (s *PartySession) ListenToPeersAsync(peerIDs []string) {
 	s.subscribeFromPeersAsync(peerIDs)
 }
 
-func (s *session) Close() error {
-	err := s.broadcastSub.Unsubscribe()
+func (s *PartySession) Close() error {
+	err := s.BroadcastSub.Unsubscribe()
 	if err != nil {
 		return err
 	}
 
-	for _, sub := range s.directSubs {
+	for _, sub := range s.DirectSubs {
 		err = sub.Unsubscribe()
 		if err != nil {
 			return err
@@ -326,20 +355,20 @@ func (s *session) Close() error {
 	return nil
 }
 
-func (s *session) GetPubKeyResult() []byte {
-	return s.pubkeyBytes
+func (s *PartySession) GetPubKeyResult() []byte {
+	return s.PubkeyBytes
 }
 
-func (s *session) ErrChan() <-chan error {
+func (s *PartySession) GetErrChan() <-chan error {
 	return s.ErrCh
 }
 
-func (s *session) GetVersion() int {
-	return s.version
+func (s *PartySession) GetVersion() int {
+	return s.Version
 }
 
-// loadOldShareDataGeneric loads the old share data from kvstore with backward compatibility (versioned and unversioned keys)
-func (s *session) loadOldShareDataGeneric(walletID string, version int, dest interface{}) error {
+// LoadOldShareDataGeneric loads the old share data from kvstore with backward compatibility (versioned and unversioned keys)
+func (s *PartySession) LoadOldShareDataGeneric(walletID string, version int, dest interface{}) error {
 	var (
 		key     string
 		keyData []byte
@@ -348,8 +377,8 @@ func (s *session) loadOldShareDataGeneric(walletID string, version int, dest int
 
 	// Try versioned key first if version > 0
 	if version > 0 {
-		key = s.composeKey(walletIDWithVersion(walletID, version))
-		keyData, err = s.kvstore.Get(key)
+		key = s.ComposeKey(WalletIDWithVersion(walletID, version))
+		keyData, err = s.Kvstore.Get(key)
 		if err != nil {
 			return err
 		}
@@ -357,8 +386,8 @@ func (s *session) loadOldShareDataGeneric(walletID string, version int, dest int
 
 	// If version == 0 or previous key not found, fall back to unversioned key
 	if version == 0 {
-		key = s.composeKey(walletID)
-		keyData, err = s.kvstore.Get(key)
+		key = s.ComposeKey(walletID)
+		keyData, err = s.Kvstore.Get(key)
 		if err != nil {
 			return err
 		}
@@ -374,8 +403,8 @@ func (s *session) loadOldShareDataGeneric(walletID string, version int, dest int
 	return nil
 }
 
-// walletIDWithVersion is used to compose the key for the kvstore
-func walletIDWithVersion(walletID string, version int) string {
+// WalletIDWithVersion is used to compose the key for the kvstore
+func WalletIDWithVersion(walletID string, version int) string {
 	if version > 0 {
 		return fmt.Sprintf("%s_v%d", walletID, version)
 	}

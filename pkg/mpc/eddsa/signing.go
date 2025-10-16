@@ -1,4 +1,4 @@
-package mpc
+package eddsa
 
 import (
 	"encoding/json"
@@ -17,11 +17,12 @@ import (
 	"github.com/fystack/mpcium/pkg/kvstore"
 	"github.com/fystack/mpcium/pkg/logger"
 	"github.com/fystack/mpcium/pkg/messaging"
+	"github.com/fystack/mpcium/pkg/mpc/core"
 	"github.com/samber/lo"
 )
 
 type eddsaSigningSession struct {
-	session
+	*core.PartySession
 	endCh               chan *common.SignatureData
 	data                *keygen.LocalPartySaveData
 	tx                  *big.Int
@@ -29,7 +30,7 @@ type eddsaSigningSession struct {
 	networkInternalCode string
 }
 
-func newEDDSASigningSession(
+func NewEDDSASigningSession(
 	walletID string,
 	txID string,
 	networkInternalCode string,
@@ -44,22 +45,21 @@ func newEDDSASigningSession(
 	resultQueue messaging.MessageQueue,
 	identityStore identity.Store,
 	idempotentKey string,
-) *eddsaSigningSession {
+) core.SigningSession {
 	return &eddsaSigningSession{
-		session: session{
-			walletID:           walletID,
-			pubSub:             pubSub,
-			direct:             direct,
-			threshold:          threshold,
-			participantPeerIDs: participantPeerIDs,
-			selfPartyID:        selfID,
-			partyIDs:           partyIDs,
-			outCh:              make(chan tss.Message),
+		PartySession: &core.PartySession{
+			WalletID:           walletID,
+			PubSub:             pubSub,
+			Direct:             direct,
+			Threshold:          threshold,
+			ParticipantPeerIDs: participantPeerIDs,
+			SelfPartyID:        selfID,
+			PartyIDs:           partyIDs,
+			OutCh:              make(chan tss.Message),
 			ErrCh:              make(chan error),
-			// preParams:          preParams,
-			kvstore:      kvstore,
-			keyinfoStore: keyinfoStore,
-			topicComposer: &TopicComposer{
+			Kvstore:            kvstore,
+			KeyinfoStore:       keyinfoStore,
+			TopicComposer: &core.TopicComposer{
 				ComposeBroadcastTopic: func() string {
 					return fmt.Sprintf("sign:eddsa:broadcast:%s:%s", walletID, txID)
 				},
@@ -67,13 +67,14 @@ func newEDDSASigningSession(
 					return fmt.Sprintf("sign:eddsa:direct:%s:%s:%s", fromID, toID, txID)
 				},
 			},
-			composeKey: func(waleltID string) string {
+			ComposeKey: func(waleltID string) string {
 				return fmt.Sprintf("eddsa:%s", waleltID)
 			},
-			getRoundFunc:  GetEddsaMsgRound,
-			resultQueue:   resultQueue,
-			identityStore: identityStore,
-			idempotentKey: idempotentKey,
+			GetRoundFunc:  GetEddsaMsgRound,
+			ResultQueue:   resultQueue,
+			IdentityStore: identityStore,
+			IdempotentKey: idempotentKey,
+			SessionType:   core.SessionTypeEDDSA,
 		},
 		endCh:               make(chan *common.SignatureData),
 		txID:                txID,
@@ -82,33 +83,33 @@ func newEDDSASigningSession(
 }
 
 func (s *eddsaSigningSession) Init(tx *big.Int) error {
-	logger.Infof("Initializing signing session with partyID: %s, peerIDs %s", s.selfPartyID, s.partyIDs)
-	ctx := tss.NewPeerContext(s.partyIDs)
-	params := tss.NewParameters(tss.Edwards(), ctx, s.selfPartyID, len(s.partyIDs), s.threshold)
+	logger.Infof("Initializing signing session with partyID: %s, peerIDs %s", s.SelfPartyID, s.PartyIDs)
+	ctx := tss.NewPeerContext(s.PartyIDs)
+	params := tss.NewParameters(tss.Edwards(), ctx, s.SelfPartyID, len(s.PartyIDs), s.Threshold)
 
-	keyInfo, err := s.keyinfoStore.Get(s.composeKey(s.walletID))
+	keyInfo, err := s.KeyinfoStore.Get(s.ComposeKey(s.WalletID))
 	if err != nil {
 		return errors.Wrap(err, "Failed to get key info data")
 	}
 
-	if len(s.participantPeerIDs) < keyInfo.Threshold+1 {
-		logger.Warn("Not enough participants to sign, expected %d, got %d", keyInfo.Threshold+1, len(s.participantPeerIDs))
-		return ErrNotEnoughParticipants
+	if len(s.ParticipantPeerIDs) < keyInfo.Threshold+1 {
+		logger.Warn("Not enough participants to sign, expected %d, got %d", keyInfo.Threshold+1, len(s.ParticipantPeerIDs))
+		return core.ErrNotEnoughParticipants
 	}
 
 	// check if t+1 participants are present
-	result := lo.Intersect(s.participantPeerIDs, keyInfo.ParticipantPeerIDs)
+	result := lo.Intersect(s.ParticipantPeerIDs, keyInfo.ParticipantPeerIDs)
 	if len(result) < keyInfo.Threshold+1 {
 		return fmt.Errorf(
 			"incompatible peerIDs to participate in signing. Current participants: %v, expected participants: %v",
-			s.participantPeerIDs,
+			s.ParticipantPeerIDs,
 			keyInfo.ParticipantPeerIDs,
 		)
 	}
 
-	logger.Info("Have enough participants to sign", "participants", s.participantPeerIDs)
-	key := s.composeKey(walletIDWithVersion(s.walletID, keyInfo.Version))
-	keyData, err := s.kvstore.Get(key)
+	logger.Info("Have enough participants to sign", "participants", s.ParticipantPeerIDs)
+	key := s.ComposeKey(core.WalletIDWithVersion(s.WalletID, keyInfo.Version))
+	keyData, err := s.Kvstore.Get(key)
 	if err != nil {
 		return errors.Wrap(err, "Failed to get wallet data from KVStore")
 	}
@@ -119,18 +120,18 @@ func (s *eddsaSigningSession) Init(tx *big.Int) error {
 		return errors.Wrap(err, "Failed to unmarshal wallet data")
 	}
 
-	s.party = signing.NewLocalParty(tx, params, data, s.outCh, s.endCh)
+	s.Party = signing.NewLocalParty(tx, params, data, s.OutCh, s.endCh)
 	s.data = &data
-	s.version = keyInfo.Version
+	s.Version = keyInfo.Version
 	s.tx = tx
 	logger.Info("Initialized sigining session successfully!")
 	return nil
 }
 
 func (s *eddsaSigningSession) Sign(onSuccess func(data []byte)) {
-	logger.Info("Starting signing", "walletID", s.walletID)
+	logger.Info("Starting signing", "walletID", s.WalletID)
 	go func() {
-		if err := s.party.Start(); err != nil {
+		if err := s.Party.Start(); err != nil {
 			s.ErrCh <- err
 		}
 	}()
@@ -138,8 +139,8 @@ func (s *eddsaSigningSession) Sign(onSuccess func(data []byte)) {
 	for {
 
 		select {
-		case msg := <-s.outCh:
-			s.handleTssMessage(msg)
+		case msg := <-s.OutCh:
+			s.HandleTssMessage(msg)
 		case sig := <-s.endCh:
 			publicKey := *s.data.EDDSAPub
 			pk := edwards.PublicKey{
@@ -157,7 +158,7 @@ func (s *eddsaSigningSession) Sign(onSuccess func(data []byte)) {
 			r := event.SigningResultEvent{
 				ResultType:          event.ResultTypeSuccess,
 				NetworkInternalCode: s.networkInternalCode,
-				WalletID:            s.walletID,
+				WalletID:            s.WalletID,
 				TxID:                s.txID,
 				Signature:           sig.Signature,
 			}
@@ -168,15 +169,15 @@ func (s *eddsaSigningSession) Sign(onSuccess func(data []byte)) {
 				return
 			}
 
-			err = s.resultQueue.Enqueue(event.SigningResultCompleteTopic, bytes, &messaging.EnqueueOptions{
-				IdempotentKey: s.idempotentKey,
+			err = s.ResultQueue.Enqueue(event.SigningResultCompleteTopic, bytes, &messaging.EnqueueOptions{
+				IdempotentKey: s.IdempotentKey,
 			})
 			if err != nil {
 				s.ErrCh <- errors.Wrap(err, "Failed to publish sign success message")
 				return
 			}
 
-			logger.Info("[SIGN] Sign successfully", "walletID", s.walletID)
+			logger.Info("[SIGN] Sign successfully", "walletID", s.WalletID)
 
 			err = s.Close()
 			if err != nil {

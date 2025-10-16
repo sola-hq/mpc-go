@@ -1,0 +1,136 @@
+package eddsa
+
+import (
+	"encoding/json"
+	"fmt"
+
+	"github.com/bnb-chain/tss-lib/v2/eddsa/keygen"
+	"github.com/bnb-chain/tss-lib/v2/tss"
+	"github.com/decred/dcrd/dcrec/edwards/v2"
+	"github.com/fystack/mpcium/pkg/identity"
+	"github.com/fystack/mpcium/pkg/keyinfo"
+	"github.com/fystack/mpcium/pkg/kvstore"
+	"github.com/fystack/mpcium/pkg/logger"
+	"github.com/fystack/mpcium/pkg/messaging"
+	"github.com/fystack/mpcium/pkg/mpc/core"
+)
+
+type eddsaKeygenSession struct {
+	*core.PartySession
+	endCh chan *keygen.LocalPartySaveData
+}
+
+func NewEDDSAKeygenSession(
+	walletID string,
+	pubSub messaging.PubSub,
+	direct messaging.DirectMessaging,
+	participantPeerIDs []string,
+	selfID *tss.PartyID,
+	partyIDs []*tss.PartyID,
+	threshold int,
+	kvstore kvstore.KVStore,
+	keyinfoStore keyinfo.Store,
+	resultQueue messaging.MessageQueue,
+	identityStore identity.Store,
+) core.KeyGenSession {
+	return &eddsaKeygenSession{
+		PartySession: &core.PartySession{
+			WalletID:           walletID,
+			PubSub:             pubSub,
+			Direct:             direct,
+			Threshold:          threshold,
+			Version:            core.DefaultVersion,
+			ParticipantPeerIDs: participantPeerIDs,
+			SelfPartyID:        selfID,
+			PartyIDs:           partyIDs,
+			OutCh:              make(chan tss.Message),
+			ErrCh:              make(chan error),
+			Kvstore:            kvstore,
+			KeyinfoStore:       keyinfoStore,
+			TopicComposer: &core.TopicComposer{
+				ComposeBroadcastTopic: func() string {
+					return fmt.Sprintf("keygen:broadcast:eddsa:%s", walletID)
+				},
+				ComposeDirectTopic: func(fromID string, toID string) string {
+					return fmt.Sprintf("keygen:direct:eddsa:%s:%s:%s", fromID, toID, walletID)
+				},
+			},
+			ComposeKey: func(waleltID string) string {
+				return fmt.Sprintf("eddsa:%s", waleltID)
+			},
+			GetRoundFunc:  GetEddsaMsgRound,
+			ResultQueue:   resultQueue,
+			SessionType:   core.SessionTypeEDDSA,
+			IdentityStore: identityStore,
+		},
+		endCh: make(chan *keygen.LocalPartySaveData),
+	}
+}
+
+func (s *eddsaKeygenSession) Init() {
+	logger.Infof("Initializing session with partyID: %s, peerIDs %s", s.GetPartyID(), s.GetPartyIDs())
+	ctx := tss.NewPeerContext(s.GetPartyIDs())
+	params := tss.NewParameters(tss.Edwards(), ctx, s.GetPartyID(), s.GetPartyCount(), s.Threshold)
+	s.Party = keygen.NewLocalParty(params, s.OutCh, s.endCh)
+	logger.Infof("[INITIALIZED] Initialized session successfully partyID: %s, peerIDs %s, walletID %s, threshold = %d", s.GetPartyID(), s.GetPartyIDs(), s.WalletID, s.Threshold)
+}
+
+func (s *eddsaKeygenSession) GenerateKey(done func()) {
+	logger.Info("Starting to generate key EDDSA", "walletID", s.WalletID)
+	go func() {
+		if err := s.Party.Start(); err != nil {
+			s.ErrCh <- err
+		}
+	}()
+
+	for {
+		select {
+		case msg := <-s.OutCh:
+			s.HandleTssMessage(msg)
+		case saveData := <-s.endCh:
+			keyBytes, err := json.Marshal(saveData)
+			if err != nil {
+				s.ErrCh <- err
+				return
+			}
+
+			err = s.Kvstore.Put(s.ComposeKey(core.WalletIDWithVersion(s.WalletID, s.GetVersion())), keyBytes)
+			if err != nil {
+				logger.Error("Failed to save key", err, "walletID", s.WalletID)
+				s.ErrCh <- err
+				return
+			}
+
+			keyInfo := keyinfo.KeyInfo{
+				ParticipantPeerIDs: s.ParticipantPeerIDs,
+				Threshold:          s.Threshold,
+				Version:            s.GetVersion(),
+			}
+
+			err = s.KeyinfoStore.Save(s.ComposeKey(s.WalletID), &keyInfo)
+			if err != nil {
+				logger.Error("Failed to save keyinfo", err, "walletID", s.WalletID)
+				s.ErrCh <- err
+				return
+			}
+
+			publicKey := saveData.EDDSAPub
+			pkX, pkY := publicKey.X(), publicKey.Y()
+			pk := edwards.PublicKey{
+				Curve: tss.Edwards(),
+				X:     pkX,
+				Y:     pkY,
+			}
+
+			pubKeyBytes := pk.SerializeCompressed()
+			s.PubkeyBytes = pubKeyBytes
+
+			err = s.Close()
+			if err != nil {
+				logger.Error("Failed to close session", err)
+			}
+			done()
+			return
+		}
+	}
+}

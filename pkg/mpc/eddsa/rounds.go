@@ -1,4 +1,4 @@
-package mpc
+package eddsa
 
 import (
 	"github.com/bnb-chain/tss-lib/v2/eddsa/keygen"
@@ -6,15 +6,8 @@ import (
 	"github.com/bnb-chain/tss-lib/v2/eddsa/signing"
 	"github.com/bnb-chain/tss-lib/v2/tss"
 	"github.com/fystack/mpcium/pkg/common/errors"
+	"github.com/fystack/mpcium/pkg/mpc/core"
 )
-
-type GetRoundFunc func(msg []byte, partyID *tss.PartyID, isBroadcast bool) (RoundInfo, error)
-
-type RoundInfo struct {
-	Index         int
-	RoundMsg      string
-	MsgIdentifier string
-}
 
 const (
 	EDDSA_KEYGEN1            = "KGRound1Message"
@@ -34,79 +27,79 @@ const (
 	EDDSA_RESHARINGROUNDS  = 4
 )
 
-func GetEddsaMsgRound(msg []byte, partyID *tss.PartyID, isBroadcast bool) (RoundInfo, error) {
+func GetEddsaMsgRound(msg []byte, partyID *tss.PartyID, isBroadcast bool) (core.RoundInfo, error) {
 	parsedMsg, err := tss.ParseWireMessage(msg, partyID, isBroadcast)
 	if err != nil {
-		return RoundInfo{}, err
+		return core.RoundInfo{}, err
 	}
 	switch parsedMsg.Content().(type) {
 	case *keygen.KGRound1Message:
-		return RoundInfo{
+		return core.RoundInfo{
 			Index:    0,
 			RoundMsg: EDDSA_KEYGEN1,
 		}, nil
 
 	case *keygen.KGRound2Message1:
-		return RoundInfo{
+		return core.RoundInfo{
 			Index:    1,
 			RoundMsg: EDDSA_KEYGEN2aUnicast,
 		}, nil
 
 	case *keygen.KGRound2Message2:
-		return RoundInfo{
+		return core.RoundInfo{
 			Index:    2,
 			RoundMsg: EDDSA_KEYGEN2b,
 		}, nil
 
 	case *signing.SignRound1Message:
-		return RoundInfo{
+		return core.RoundInfo{
 			Index:    0,
 			RoundMsg: EDDSA_KEYSIGN1,
 		}, nil
 
 	case *signing.SignRound2Message:
-		return RoundInfo{
+		return core.RoundInfo{
 			Index:    0,
 			RoundMsg: EDDSA_KEYSIGN2,
 		}, nil
 
 	case *signing.SignRound3Message:
-		return RoundInfo{
+		return core.RoundInfo{
 			Index:    0,
 			RoundMsg: EDDSA_KEYSIGN3,
 		}, nil
 
 	case *resharing.DGRound1Message:
-		return RoundInfo{
+		return core.RoundInfo{
 			Index:    0,
 			RoundMsg: EDDSA_RESHARING1,
 		}, nil
 
 	case *resharing.DGRound2Message:
-		return RoundInfo{
+		return core.RoundInfo{
 			Index:    1,
 			RoundMsg: EDDSA_RESHARING2,
 		}, nil
 
 	case *resharing.DGRound3Message1:
-		return RoundInfo{
+		return core.RoundInfo{
 			Index:    2,
 			RoundMsg: EDDSA_RESHARING3aUnicast,
 		}, nil
 
 	case *resharing.DGRound3Message2:
-		return RoundInfo{
+		return core.RoundInfo{
 			Index:    3,
 			RoundMsg: EDDSA_RESHARING3bUnicast,
 		}, nil
 
 	case *resharing.DGRound4Message:
-		return RoundInfo{
+		return core.RoundInfo{
 			Index:    4,
 			RoundMsg: EDDSA_RESHARING4,
 		}, nil
 
 	default:
-		return RoundInfo{}, errors.New("unknown round")
+		return core.RoundInfo{}, errors.New("unknown round")
 	}
 }
