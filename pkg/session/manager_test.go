@@ -27,7 +27,7 @@ func TestManager_CheckDuplicateSession(t *testing.T) {
 	manager := NewManager(1*time.Minute, 5*time.Minute)
 
 	// Test non-duplicate session
-	if manager.CheckDuplicateSession("wallet1", "tx1") {
+	if manager.HasSession("wallet1", "tx1") {
 		t.Error("Expected non-duplicate session to return false")
 	}
 
@@ -35,16 +35,16 @@ func TestManager_CheckDuplicateSession(t *testing.T) {
 	manager.AddSession("wallet1", "tx1")
 
 	// Test duplicate session
-	if !manager.CheckDuplicateSession("wallet1", "tx1") {
+	if !manager.HasSession("wallet1", "tx1") {
 		t.Error("Expected duplicate session to return true")
 	}
 
 	// Test different wallet/tx combination
-	if manager.CheckDuplicateSession("wallet1", "tx2") {
+	if manager.HasSession("wallet1", "tx2") {
 		t.Error("Expected different tx to return false")
 	}
 
-	if manager.CheckDuplicateSession("wallet2", "tx1") {
+	if manager.HasSession("wallet2", "tx1") {
 		t.Error("Expected different wallet to return false")
 	}
 }

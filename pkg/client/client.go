@@ -144,7 +144,7 @@ func (c *mpcClient) OnWalletCreationResult(callback func(event event.KeygenResul
 	return nil
 }
 
-// SignTransaction builds a SignTxMessage, signs it, and publishes it.
+// SignTransaction builds a SigningMessage, signs it, and publishes it.
 func (c *mpcClient) SignTransaction(msg *types.SigningMessage) error {
 	// compute the canonical raw bytes (omitting Signature field)
 	raw, err := msg.Raw()

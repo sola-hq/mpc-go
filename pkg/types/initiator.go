@@ -32,12 +32,11 @@ type KeygenMessage struct {
 }
 
 type SigningMessage struct {
-	KeyType             KeyType `json:"key_type"`
-	WalletID            string  `json:"wallet_id"`
-	NetworkInternalCode string  `json:"network_internal_code"`
-	TxID                string  `json:"tx_id"`
-	Tx                  []byte  `json:"tx"`
-	Signature           []byte  `json:"signature"`
+	KeyType   KeyType `json:"key_type"`
+	WalletID  string  `json:"wallet_id"`
+	TxID      string  `json:"tx_id"`
+	Tx        []byte  `json:"tx"`
+	Signature []byte  `json:"signature"`
 }
 
 type ResharingMessage struct {
@@ -52,17 +51,15 @@ type ResharingMessage struct {
 func (m *SigningMessage) Raw() ([]byte, error) {
 	// omit the Signature field itself when computing the signed‐over data
 	payload := struct {
-		KeyType             KeyType `json:"key_type"`
-		WalletID            string  `json:"wallet_id"`
-		NetworkInternalCode string  `json:"network_internal_code"`
-		TxID                string  `json:"tx_id"`
-		Tx                  []byte  `json:"tx"`
+		KeyType  KeyType `json:"key_type"`
+		WalletID string  `json:"wallet_id"`
+		TxID     string  `json:"tx_id"`
+		Tx       []byte  `json:"tx"`
 	}{
-		KeyType:             m.KeyType,
-		WalletID:            m.WalletID,
-		NetworkInternalCode: m.NetworkInternalCode,
-		TxID:                m.TxID,
-		Tx:                  m.Tx,
+		KeyType:  m.KeyType,
+		WalletID: m.WalletID,
+		TxID:     m.TxID,
+		Tx:       m.Tx,
 	}
 	return json.Marshal(payload)
 }

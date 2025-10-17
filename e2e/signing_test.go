@@ -328,12 +328,11 @@ func testECDSASigning(t *testing.T, suite *E2ETestSuite, walletID, message strin
 
 	// Create a signing transaction message
 	txID := uuid.New().String()
-	signTxMsg := &types.SignTxMessage{
-		WalletID:            walletID,
-		TxID:                txID,
-		Tx:                  []byte(message),
-		KeyType:             types.KeyTypeSecp256k1,
-		NetworkInternalCode: "test",
+	signTxMsg := &types.SigningMessage{
+		WalletID: walletID,
+		TxID:     txID,
+		Tx:       []byte(message),
+		KeyType:  types.KeyTypeSecp256k1,
 	}
 
 	// Trigger ECDSA signing
@@ -403,12 +402,11 @@ func testEdDSASigning(t *testing.T, suite *E2ETestSuite, walletID, message strin
 
 	// Create a signing transaction message
 	txID := uuid.New().String()
-	signTxMsg := &types.SignTxMessage{
-		WalletID:            walletID,
-		TxID:                txID,
-		Tx:                  []byte(message),
-		KeyType:             types.KeyTypeEd25519,
-		NetworkInternalCode: "test",
+	signTxMsg := &types.SigningMessage{
+		WalletID: walletID,
+		TxID:     txID,
+		Tx:       []byte(message),
+		KeyType:  types.KeyTypeEd25519,
 	}
 
 	// Trigger EdDSA signing
@@ -455,12 +453,11 @@ func testECDSASigningWithSharedListener(t *testing.T, suite *E2ETestSuite, walle
 
 	// Create a signing transaction message
 	txID := uuid.New().String()
-	signTxMsg := &types.SignTxMessage{
-		WalletID:            walletID,
-		TxID:                txID,
-		Tx:                  []byte(message),
-		KeyType:             types.KeyTypeSecp256k1,
-		NetworkInternalCode: "test",
+	signTxMsg := &types.SigningMessage{
+		WalletID: walletID,
+		TxID:     txID,
+		Tx:       []byte(message),
+		KeyType:  types.KeyTypeSecp256k1,
 	}
 
 	// Trigger ECDSA signing
@@ -516,12 +513,11 @@ func testEdDSASigningWithSharedListener(t *testing.T, suite *E2ETestSuite, walle
 
 	// Create a signing transaction message
 	txID := uuid.New().String()
-	signTxMsg := &types.SignTxMessage{
-		WalletID:            walletID,
-		TxID:                txID,
-		Tx:                  []byte(message),
-		KeyType:             types.KeyTypeEd25519,
-		NetworkInternalCode: "test",
+	signTxMsg := &types.SigningMessage{
+		WalletID: walletID,
+		TxID:     txID,
+		Tx:       []byte(message),
+		KeyType:  types.KeyTypeEd25519,
 	}
 
 	// Trigger EdDSA signing

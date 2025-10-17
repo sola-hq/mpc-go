@@ -23,17 +23,15 @@ import (
 
 type eddsaSigningSession struct {
 	*core.PartySession
-	endCh               chan *common.SignatureData
-	data                *keygen.LocalPartySaveData
-	tx                  *big.Int
-	txID                string
-	networkInternalCode string
+	endCh chan *common.SignatureData
+	data  *keygen.LocalPartySaveData
+	tx    *big.Int
+	txID  string
 }
 
 func NewEDDSASigningSession(
 	walletID string,
 	txID string,
-	networkInternalCode string,
 	pubSub messaging.PubSub,
 	direct messaging.DirectMessaging,
 	participantPeerIDs []string,
@@ -76,9 +74,8 @@ func NewEDDSASigningSession(
 			IdempotentKey: idempotentKey,
 			SessionType:   core.SessionTypeEDDSA,
 		},
-		endCh:               make(chan *common.SignatureData),
-		txID:                txID,
-		networkInternalCode: networkInternalCode,
+		endCh: make(chan *common.SignatureData),
+		txID:  txID,
 	}
 }
 
@@ -156,11 +153,10 @@ func (s *eddsaSigningSession) Sign(onSuccess func(data []byte)) {
 			}
 
 			r := event.SigningResultEvent{
-				ResultType:          event.ResultTypeSuccess,
-				NetworkInternalCode: s.networkInternalCode,
-				WalletID:            s.WalletID,
-				TxID:                s.txID,
-				Signature:           sig.Signature,
+				ResultType: event.ResultTypeSuccess,
+				WalletID:   s.WalletID,
+				TxID:       s.txID,
+				Signature:  sig.Signature,
 			}
 
 			bytes, err := json.Marshal(r)

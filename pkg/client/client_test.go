@@ -140,11 +140,10 @@ func TestMPCClient_SignTransaction(t *testing.T) {
 
 	// Test signing part of SignTransaction
 	msg := &types.SigningMessage{
-		KeyType:             types.KeyTypeSecp256k1,
-		WalletID:            "test-wallet",
-		NetworkInternalCode: "btc-mainnet",
-		TxID:                "test-tx-123",
-		Tx:                  []byte("test transaction data"),
+		KeyType:  types.KeyTypeSecp256k1,
+		WalletID: "test-wallet",
+		TxID:     "test-tx-123",
+		Tx:       []byte("test transaction data"),
 	}
 
 	raw, err := msg.Raw()

@@ -42,8 +42,8 @@ func (m *Manager) AddSession(walletID, txID string) {
 	logger.Debug("Session added", "sessionID", sessionID)
 }
 
-// CheckDuplicateSession checks for duplicate sessions
-func (m *Manager) CheckDuplicateSession(walletID, txID string) bool {
+// HasSession checks if a session already exists
+func (m *Manager) HasSession(walletID, txID string) bool {
 	sessionID := GetSessionID(walletID, txID)
 
 	m.sessionsLock.RLock()
@@ -51,7 +51,7 @@ func (m *Manager) CheckDuplicateSession(walletID, txID string) bool {
 	m.sessionsLock.RUnlock()
 
 	if exists {
-		logger.Info("Duplicate session detected", "walletID", walletID, "txID", txID)
+		logger.Info("Session already exists", "walletID", walletID, "txID", txID)
 		return true
 	}
 

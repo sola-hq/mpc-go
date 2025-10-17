@@ -70,11 +70,10 @@ func main() {
 	dummyTx := []byte("deadbeef") // replace with real transaction bytes
 
 	txMsg := &types.SigningMessage{
-		KeyType:             types.KeyTypeEd25519,
-		WalletID:            "ad24f678-b04b-4149-bcf6-bf9c90df8e63", // Use the generated wallet ID
-		NetworkInternalCode: "solana-devnet",
-		TxID:                txID,
-		Tx:                  dummyTx,
+		KeyType:  types.KeyTypeEd25519,
+		WalletID: "ad24f678-b04b-4149-bcf6-bf9c90df8e63", // Use the generated wallet ID
+		TxID:     txID,
+		Tx:       dummyTx,
 	}
 	err = mpcClient.SignTransaction(txMsg)
 	if err != nil {

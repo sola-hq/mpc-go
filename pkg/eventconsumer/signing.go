@@ -218,32 +218,31 @@ func (sc *signingConsumer) handleSigningEvent(msg jetstream.Msg) {
 	}
 }
 
-func (sc *signingConsumer) handleSigningError(signMsg types.SigningMessage, errorCode event.ErrorCode, err error, sessionID string) {
+func (sc *signingConsumer) handleSigningError(msg types.SigningMessage, errorCode event.ErrorCode, err error, sessionID string) {
 	signingResult := event.SigningResultEvent{
-		ResultType:          event.ResultTypeError,
-		ErrorCode:           errorCode,
-		NetworkInternalCode: signMsg.NetworkInternalCode,
-		WalletID:            signMsg.WalletID,
-		TxID:                signMsg.TxID,
-		ErrorReason:         err.Error(),
+		ResultType:  event.ResultTypeError,
+		ErrorCode:   errorCode,
+		WalletID:    msg.WalletID,
+		TxID:        msg.TxID,
+		ErrorReason: err.Error(),
 	}
 
 	signingResultBytes, err := json.Marshal(signingResult)
 	if err != nil {
 		logger.Error("Failed to marshal signing result event", err,
-			"walletID", signMsg.WalletID,
-			"txID", signMsg.TxID,
+			"walletID", msg.WalletID,
+			"txID", msg.TxID,
 		)
 		return
 	}
 
 	err = sc.signingResultQueue.Enqueue(event.SigningResultCompleteTopic, signingResultBytes, &messaging.EnqueueOptions{
-		IdempotentKey: buildIdempotentKey(signMsg.TxID, sessionID, core.TypeSigningResultFmt),
+		IdempotentKey: buildIdempotentKey(msg.TxID, sessionID, core.TypeSigningResultFmt),
 	})
 	if err != nil {
 		logger.Error("Failed to enqueue signing result event", err,
-			"walletID", signMsg.WalletID,
-			"txID", signMsg.TxID,
+			"walletID", msg.WalletID,
+			"txID", msg.TxID,
 		)
 	}
 }

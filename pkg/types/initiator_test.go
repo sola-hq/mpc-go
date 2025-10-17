@@ -46,12 +46,11 @@ func TestKeygenMessage_InitiatorID(t *testing.T) {
 
 func TestSigningMessage_Raw(t *testing.T) {
 	msg := &SigningMessage{
-		KeyType:             KeyTypeSecp256k1,
-		WalletID:            "wallet-123",
-		NetworkInternalCode: "BTC",
-		TxID:                "tx-456",
-		Tx:                  []byte("transaction-data"),
-		Signature:           []byte("signature-data"),
+		KeyType:   KeyTypeSecp256k1,
+		WalletID:  "wallet-123",
+		TxID:      "tx-456",
+		Tx:        []byte("transaction-data"),
+		Signature: []byte("signature-data"),
 	}
 
 	raw, err := msg.Raw()
@@ -62,19 +61,17 @@ func TestSigningMessage_Raw(t *testing.T) {
 	assert.NotContains(t, string(raw), "signature-data")
 	assert.Contains(t, string(raw), "wallet-123")
 	assert.Contains(t, string(raw), "secp256k1")
-	assert.Contains(t, string(raw), "BTC")
 	assert.Contains(t, string(raw), "tx-456")
 }
 
 func TestSigningMessage_Sig(t *testing.T) {
 	signature := []byte("transaction-signature")
 	msg := &SigningMessage{
-		KeyType:             KeyTypeEd25519,
-		WalletID:            "wallet",
-		NetworkInternalCode: "ETH",
-		TxID:                "tx",
-		Tx:                  []byte("tx-data"),
-		Signature:           signature,
+		KeyType:   KeyTypeEd25519,
+		WalletID:  "wallet",
+		TxID:      "tx",
+		Tx:        []byte("tx-data"),
+		Signature: signature,
 	}
 
 	assert.Equal(t, signature, msg.Sig())
@@ -83,12 +80,11 @@ func TestSigningMessage_Sig(t *testing.T) {
 func TestSigningMessage_InitiatorID(t *testing.T) {
 	txID := "transaction-789"
 	msg := &SigningMessage{
-		KeyType:             KeyTypeSecp256k1,
-		WalletID:            "wallet",
-		NetworkInternalCode: "BTC",
-		TxID:                txID,
-		Tx:                  []byte("data"),
-		Signature:           []byte("sig"),
+		KeyType:   KeyTypeSecp256k1,
+		WalletID:  "wallet",
+		TxID:      txID,
+		Tx:        []byte("data"),
+		Signature: []byte("sig"),
 	}
 
 	assert.Equal(t, txID, msg.InitiatorID())
@@ -153,14 +149,13 @@ func TestResharingMessage_InitiatorID(t *testing.T) {
 	assert.Equal(t, walletID, msg.InitiatorID())
 }
 
-func TestSignTxMessage_RawConsistency(t *testing.T) {
+func TestSigningMessage_RawConsistency(t *testing.T) {
 	msg := &SigningMessage{
-		KeyType:             KeyTypeSecp256k1,
-		WalletID:            "consistent-wallet",
-		NetworkInternalCode: "BTC",
-		TxID:                "consistent-tx",
-		Tx:                  []byte("consistent-data"),
-		Signature:           []byte("signature1"),
+		KeyType:   KeyTypeSecp256k1,
+		WalletID:  "consistent-wallet",
+		TxID:      "consistent-tx",
+		Tx:        []byte("consistent-data"),
+		Signature: []byte("signature1"),
 	}
 
 	raw1, err1 := msg.Raw()
@@ -180,14 +175,13 @@ func TestAllMessageTypesImplementInitiatorMessage(t *testing.T) {
 	var _ InitiatorMessage = &ResharingMessage{}
 }
 
-func TestSignTxMessage_EmptyValues(t *testing.T) {
+func TestSigningMessage_EmptyValues(t *testing.T) {
 	msg := &SigningMessage{
-		KeyType:             "",
-		WalletID:            "",
-		NetworkInternalCode: "",
-		TxID:                "",
-		Tx:                  nil,
-		Signature:           nil,
+		KeyType:   "",
+		WalletID:  "",
+		TxID:      "",
+		Tx:        nil,
+		Signature: nil,
 	}
 
 	raw, err := msg.Raw()

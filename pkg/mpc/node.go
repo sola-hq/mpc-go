@@ -147,7 +147,6 @@ func (p *Node) CreateSigningSession(
 	sessionType core.SessionType,
 	walletID string,
 	txID string,
-	networkInternalCode string,
 	resultQueue messaging.MessageQueue,
 	idempotentKey string,
 ) (core.SigningSession, error) {
@@ -184,7 +183,6 @@ func (p *Node) CreateSigningSession(
 		return ecdsa.NewECDSASigningSession(
 			walletID,
 			txID,
-			networkInternalCode,
 			p.pubSub,
 			p.direct,
 			readyParticipantIDs,
@@ -203,7 +201,6 @@ func (p *Node) CreateSigningSession(
 		return eddsa.NewEDDSASigningSession(
 			walletID,
 			txID,
-			networkInternalCode,
 			p.pubSub,
 			p.direct,
 			readyParticipantIDs,

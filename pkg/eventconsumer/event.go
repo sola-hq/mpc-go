@@ -366,13 +366,12 @@ func (ec *eventConsumer) handleSigningEvent(natMsg *nats.Msg) {
 		ec.node.ID(),
 	)
 
-	// Check for duplicate session and track if new
-	if ec.sessionMgr.CheckDuplicateSession(msg.WalletID, msg.TxID) {
-		duplicateErr := fmt.Errorf("duplicate signing request detected for walletID=%s txID=%s", msg.WalletID, msg.TxID)
+	// Check for duplicate session
+	if ec.sessionMgr.HasSession(msg.WalletID, msg.TxID) {
+		duplicateErr := fmt.Errorf("session already exists for walletID=%s txID=%s", msg.WalletID, msg.TxID)
 		ec.handleSigningSessionError(
 			msg.WalletID,
 			msg.TxID,
-			msg.NetworkInternalCode,
 			duplicateErr,
 			"Duplicate session",
 			natMsg,
@@ -389,7 +388,6 @@ func (ec *eventConsumer) handleSigningEvent(natMsg *nats.Msg) {
 			core.SessionTypeECDSA,
 			msg.WalletID,
 			msg.TxID,
-			msg.NetworkInternalCode,
 			ec.signingResultQueue,
 			idempotentKey,
 		)
@@ -398,7 +396,6 @@ func (ec *eventConsumer) handleSigningEvent(natMsg *nats.Msg) {
 			core.SessionTypeEDDSA,
 			msg.WalletID,
 			msg.TxID,
-			msg.NetworkInternalCode,
 			ec.signingResultQueue,
 			idempotentKey,
 		)
@@ -430,7 +427,6 @@ func (ec *eventConsumer) handleSigningEvent(natMsg *nats.Msg) {
 		ec.handleSigningSessionError(
 			msg.WalletID,
 			msg.TxID,
-			msg.NetworkInternalCode,
 			sessionErr,
 			"Failed to create signing session",
 			natMsg,
@@ -444,7 +440,6 @@ func (ec *eventConsumer) handleSigningEvent(natMsg *nats.Msg) {
 		ec.handleSigningSessionError(
 			msg.WalletID,
 			msg.TxID,
-			msg.NetworkInternalCode,
 			err,
 			"Failed to init signing session",
 			natMsg,
@@ -466,7 +461,6 @@ func (ec *eventConsumer) handleSigningEvent(natMsg *nats.Msg) {
 					ec.handleSigningSessionError(
 						msg.WalletID,
 						msg.TxID,
-						msg.NetworkInternalCode,
 						err,
 						"Failed to sign tx",
 						natMsg,
@@ -506,26 +500,26 @@ func (ec *eventConsumer) consumeTxSigningEvent() error {
 
 	return nil
 }
-func (ec *eventConsumer) handleSigningSessionError(walletID, txID, networkInternalCode string, err error, contextMsg string, natMsg *nats.Msg) {
+
+// handleSigningSessionError handles errors that occur during signing operations
+func (ec *eventConsumer) handleSigningSessionError(walletID, txID string, err error, contextMsg string, natMsg *nats.Msg) {
 	fullErrMsg := fmt.Sprintf("%s: %v", contextMsg, err)
 	errorCode := event.GetErrorCodeFromError(err)
 
 	logger.Warn("Signing session error",
 		"walletID", walletID,
 		"txID", txID,
-		"networkInternalCode", networkInternalCode,
 		"error", err.Error(),
 		"errorCode", errorCode,
 		"context", contextMsg,
 	)
 
 	signingResult := event.SigningResultEvent{
-		ResultType:          event.ResultTypeError,
-		ErrorCode:           errorCode,
-		NetworkInternalCode: networkInternalCode,
-		WalletID:            walletID,
-		TxID:                txID,
-		ErrorReason:         fullErrMsg,
+		ResultType:  event.ResultTypeError,
+		ErrorCode:   errorCode,
+		WalletID:    walletID,
+		TxID:        txID,
+		ErrorReason: fullErrMsg,
 	}
 
 	signingResultBytes, err := json.Marshal(signingResult)
