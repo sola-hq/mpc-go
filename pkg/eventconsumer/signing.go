@@ -218,9 +218,8 @@ func (sc *signingConsumer) handleSigningEvent(msg jetstream.Msg) {
 	}
 }
 
-func (sc *signingConsumer) handleSigningError(msg types.SigningMessage, errorCode event.ErrorCode, err error, sessionID string) {
-	signingResult := event.SigningResultEvent{
-		ResultType:  event.ResultTypeError,
+func (sc *signingConsumer) handleSigningError(msg types.SigningMessage, errorCode types.ErrorCode, err error, sessionID string) {
+	signingResult := types.SigningResponse{
 		ErrorCode:   errorCode,
 		WalletID:    msg.WalletID,
 		TxID:        msg.TxID,

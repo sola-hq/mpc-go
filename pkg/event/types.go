@@ -1,16 +1,12 @@
 package event
 
-import "strings"
+import (
+	"strings"
 
-type ResultType string
-
-const (
-	ResultTypeSuccess ResultType = "success"
-	ResultTypeError   ResultType = "error"
+	"github.com/fystack/mpcium/pkg/types"
 )
 
-// ErrorCode defines specific error types that can occur in MPC operations
-type ErrorCode string
+type ErrorCode = types.ErrorCode
 
 const (
 	// Generic/Unknown errors

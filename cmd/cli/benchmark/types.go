@@ -1,6 +1,10 @@
 package benchmark
 
-import "time"
+import (
+	"time"
+
+	"github.com/fystack/mpcium/pkg/types"
+)
 
 type BenchmarkResult struct {
 	TotalOperations  int
@@ -23,6 +27,6 @@ type OperationResult struct {
 	EndTime     time.Time
 	Completed   bool
 	Success     bool
+	ErrorCode   types.ErrorCode
 	ErrorReason string
-	ErrorCode   string
 }

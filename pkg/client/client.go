@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/fystack/mpcium/pkg/client/signer"
 	"github.com/fystack/mpcium/pkg/event"
 	"github.com/fystack/mpcium/pkg/eventconsumer"
 	"github.com/fystack/mpcium/pkg/logger"
@@ -13,25 +14,14 @@ import (
 	"github.com/nats-io/nats.go"
 )
 
-type MPCClient interface {
-	CreateWallet(walletID string) error
-	OnWalletCreationResult(callback func(event event.KeygenResultEvent)) error
-
-	SignTransaction(msg *types.SigningMessage) error
-	OnSignResult(callback func(event event.SigningResultEvent)) error
-
-	Resharing(msg *types.ResharingMessage) error
-	OnResharingResult(callback func(event event.ResharingResultEvent)) error
-}
-
-type mpcClient struct {
+type initiator struct {
 	signingBroker        messaging.MessageBroker
 	keygenBroker         messaging.MessageBroker
 	pubsub               messaging.PubSub
 	keygenResultQueue    messaging.MessageQueue
 	signingResultQueue   messaging.MessageQueue
 	resharingResultQueue messaging.MessageQueue
-	signer               Signer
+	signer               signer.Signer
 }
 
 // Options defines configuration options for creating a new MPCClient
@@ -40,12 +30,13 @@ type Options struct {
 	NatsConn *nats.Conn
 
 	// Signer for signing messages
-	Signer Signer
+	Signer signer.Signer
 }
 
 // NewMPCClient creates a new MPC client using the provided options.
 // The signer must be provided to handle message signing.
-func NewMPCClient(opts Options) MPCClient {
+func NewMPCClient(opts Options) types.Initiator {
+	// 1) Validate the options
 	if opts.Signer == nil {
 		logger.Fatal("Signer is required", nil)
 	}
@@ -55,9 +46,7 @@ func NewMPCClient(opts Options) MPCClient {
 		context.Background(),
 		opts.NatsConn,
 		event.SigningBrokerStream,
-		[]string{
-			event.SigningRequestTopic,
-		},
+		[]string{event.SigningRequestTopic},
 	)
 	if err != nil {
 		logger.Fatal("Failed to create signing jetstream broker", err)
@@ -86,7 +75,7 @@ func NewMPCClient(opts Options) MPCClient {
 	signingResultQueue := manager.NewMessageQueue(event.SigningResultQueueName)
 	resharingResultQueue := manager.NewMessageQueue(event.ResharingResultQueueName)
 
-	return &mpcClient{
+	return &initiator{
 		signingBroker:        signingBroker,
 		keygenBroker:         keygenBroker,
 		pubsub:               pubsub,
@@ -98,7 +87,7 @@ func NewMPCClient(opts Options) MPCClient {
 }
 
 // CreateWallet generates a GenerateKeyMessage, signs it, and publishes it.
-func (c *mpcClient) CreateWallet(walletID string) error {
+func (c *initiator) CreateWallet(walletID string) error {
 	// build the message
 	msg := &types.KeygenMessage{
 		WalletID: walletID,
@@ -126,9 +115,9 @@ func (c *mpcClient) CreateWallet(walletID string) error {
 }
 
 // The callback will be invoked whenever a wallet creation result is received.
-func (c *mpcClient) OnWalletCreationResult(callback func(event event.KeygenResultEvent)) error {
+func (c *initiator) OnWalletCreationResult(callback func(event types.KeygenResponse)) error {
 	err := c.keygenResultQueue.Dequeue(event.KeygenResultTopic, func(msg []byte) error {
-		var event event.KeygenResultEvent
+		var event types.KeygenResponse
 		err := json.Unmarshal(msg, &event)
 		if err != nil {
 			return err
@@ -145,7 +134,7 @@ func (c *mpcClient) OnWalletCreationResult(callback func(event event.KeygenResul
 }
 
 // SignTransaction builds a SigningMessage, signs it, and publishes it.
-func (c *mpcClient) SignTransaction(msg *types.SigningMessage) error {
+func (c *initiator) SignTransaction(msg *types.SigningMessage) error {
 	// compute the canonical raw bytes (omitting Signature field)
 	raw, err := msg.Raw()
 	if err != nil {
@@ -168,9 +157,9 @@ func (c *mpcClient) SignTransaction(msg *types.SigningMessage) error {
 	return nil
 }
 
-func (c *mpcClient) OnSignResult(callback func(event event.SigningResultEvent)) error {
+func (c *initiator) OnSignResult(callback func(event types.SigningResponse)) error {
 	err := c.signingResultQueue.Dequeue(event.SigningResultCompleteTopic, func(msg []byte) error {
-		var event event.SigningResultEvent
+		var event types.SigningResponse
 		err := json.Unmarshal(msg, &event)
 		if err != nil {
 			return err
@@ -186,7 +175,7 @@ func (c *mpcClient) OnSignResult(callback func(event event.SigningResultEvent)) 
 	return nil
 }
 
-func (c *mpcClient) Resharing(msg *types.ResharingMessage) error {
+func (c *initiator) Resharing(msg *types.ResharingMessage) error {
 	// compute the canonical raw bytes
 	raw, err := msg.Raw()
 	if err != nil {
@@ -209,11 +198,11 @@ func (c *mpcClient) Resharing(msg *types.ResharingMessage) error {
 	return nil
 }
 
-func (c *mpcClient) OnResharingResult(callback func(event event.ResharingResultEvent)) error {
+func (c *initiator) OnResharingResult(callback func(event types.ResharingResponse)) error {
 
 	err := c.resharingResultQueue.Dequeue(event.ResharingResultTopic, func(msg []byte) error {
 		logger.Info("Received resharing success message", "raw", string(msg))
-		var event event.ResharingResultEvent
+		var event types.ResharingResponse
 		err := json.Unmarshal(msg, &event)
 		if err != nil {
 			logger.Error("Failed to unmarshal resharing success event", err, "raw", string(msg))

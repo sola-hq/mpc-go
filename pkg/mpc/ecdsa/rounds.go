@@ -38,7 +38,7 @@ const (
 	TSSKEYSIGNROUNDS = 10
 )
 
-func GetEcdsaMsgRound(msg []byte, partyID *tss.PartyID, isBroadcast bool) (core.RoundInfo, error) {
+func GetMsgRound(msg []byte, partyID *tss.PartyID, isBroadcast bool) (core.RoundInfo, error) {
 	parsedMsg, err := tss.ParseWireMessage(msg, partyID, isBroadcast)
 	if err != nil {
 		return core.RoundInfo{}, err

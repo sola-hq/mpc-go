@@ -5,7 +5,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/fystack/mpcium/pkg/event"
 	"github.com/fystack/mpcium/pkg/logger"
 	"github.com/fystack/mpcium/pkg/types"
 	"github.com/google/uuid"
@@ -79,11 +78,11 @@ func testKeyGenerationForResharing(t *testing.T, suite *E2ETestSuite) {
 	t.Logf("Generated wallet IDs for resharing: %v", walletIDs)
 
 	// Setup result listener
-	err := suite.mpcClient.OnWalletCreationResult(func(result event.KeygenResultEvent) {
-		t.Logf("Received keygen result for wallet %s: %s", result.WalletID, result.ResultType)
+	err := suite.mpcClient.OnWalletCreationResult(func(result types.KeygenResponse) {
+		t.Logf("Received keygen result for wallet %s: %s", result.WalletID, result.ErrorCode)
 		suite.keygenResults[result.WalletID] = &result
 
-		if result.ResultType == event.ResultTypeError {
+		if result.ErrorCode != "" {
 			t.Logf("Keygen failed for wallet %s: %s (%s)", result.WalletID, result.ErrorReason, result.ErrorCode)
 		} else {
 			t.Logf("Keygen succeeded for wallet %s", result.WalletID)
@@ -139,7 +138,7 @@ checkResults:
 			continue
 		}
 
-		if result.ResultType == event.ResultTypeError {
+		if result.ErrorCode != "" {
 			t.Errorf("Keygen failed for wallet %s: %s (%s)", walletID, result.ErrorReason, result.ErrorCode)
 		} else {
 			t.Logf("Keygen succeeded for wallet %s", result.WalletID)
@@ -166,11 +165,11 @@ func testResharingAllNodes(t *testing.T, suite *E2ETestSuite) {
 	t.Logf("Available node IDs for resharing: %v", nodeIDs)
 
 	// Setup a shared resharing result listener for all resharing tests
-	err = suite.mpcClient.OnResharingResult(func(result event.ResharingResultEvent) {
-		t.Logf("Received resharing result for wallet %s: %s", result.WalletID, result.ResultType)
+	err = suite.mpcClient.OnResharingResult(func(result types.ResharingResponse) {
+		t.Logf("Received resharing result for wallet %s: %s", result.WalletID, result.ErrorCode)
 		suite.resharingResults[result.WalletID] = &result
 
-		if result.ResultType == event.ResultTypeError {
+		if result.ErrorCode != "" {
 			t.Logf("Resharing failed for wallet %s: %s (%s)", result.WalletID, result.ErrorReason, result.ErrorCode)
 		} else {
 			t.Logf("Resharing succeeded for wallet %s", result.WalletID)
@@ -251,7 +250,7 @@ checkECDSAResult:
 	result, exists := suite.resharingResults[walletID]
 	require.True(t, exists, "No ECDSA resharing result received for wallet %s", walletID)
 
-	if result.ResultType == event.ResultTypeError {
+	if result.ErrorCode != "" {
 		t.Fatalf("ECDSA resharing failed for wallet %s: %s (%s)", walletID, result.ErrorReason, result.ErrorCode)
 	}
 
@@ -261,7 +260,7 @@ checkECDSAResult:
 	t.Logf("Key type: %s", result.KeyType)
 
 	// Verify the resharing result
-	assert.Equal(t, event.ResultTypeSuccess, result.ResultType, "ECDSA resharing should succeed")
+	assert.Equal(t, string(result.ErrorCode), "", "ECDSA resharing should succeed")
 	assert.Equal(t, walletID, result.WalletID, "Wallet ID should match")
 	assert.Equal(t, resharingMsg.NewThreshold, result.NewThreshold, "New threshold should match")
 	assert.Equal(t, types.KeyTypeSecp256k1, result.KeyType, "Key type should be secp256k1")
@@ -318,7 +317,7 @@ checkEdDSAResult:
 	result, exists := suite.resharingResults[walletID]
 	require.True(t, exists, "No EdDSA resharing result received for wallet %s", walletID)
 
-	if result.ResultType == event.ResultTypeError {
+	if result.ErrorCode != "" {
 		t.Fatalf("EdDSA resharing failed for wallet %s: %s (%s)", walletID, result.ErrorReason, result.ErrorCode)
 	}
 
@@ -328,7 +327,7 @@ checkEdDSAResult:
 	t.Logf("Key type: %s", result.KeyType)
 
 	// Verify the resharing result
-	assert.Equal(t, event.ResultTypeSuccess, result.ResultType, "EdDSA resharing should succeed")
+	assert.Equal(t, string(result.ErrorCode), "", "EdDSA resharing should succeed")
 	assert.Equal(t, walletID, result.WalletID, "Wallet ID should match")
 	assert.Equal(t, resharingMsg.NewThreshold, result.NewThreshold, "New threshold should match")
 	assert.Equal(t, types.KeyTypeEd25519, result.KeyType, "Key type should be ed25519")
@@ -345,13 +344,13 @@ func testSigningAfterResharing(t *testing.T, suite *E2ETestSuite) {
 	}
 
 	// Setup a shared signing result listener for all signing tests
-	signingResults := make(map[string]*event.SigningResultEvent)
-	err := suite.mpcClient.OnSignResult(func(result event.SigningResultEvent) {
-		t.Logf("Received signing result for wallet %s (tx: %s): %s", result.WalletID, result.TxID, result.ResultType)
+	signingResults := make(map[string]*types.SigningResponse)
+	err := suite.mpcClient.OnSignResult(func(result types.SigningResponse) {
+		t.Logf("Received signing result for wallet %s (tx: %s): %s", result.WalletID, result.TxID, result.ErrorCode)
 		// Use TxID as key to avoid conflicts between different signing operations
 		signingResults[result.TxID] = &result
 
-		if result.ResultType == event.ResultTypeError {
+		if result.ErrorCode != "" {
 			t.Logf("Signing failed for wallet %s (tx: %s): %s (%s)", result.WalletID, result.TxID, result.ErrorReason, result.ErrorCode)
 		} else {
 			t.Logf("Signing succeeded for wallet %s (tx: %s)", result.WalletID, result.TxID)
@@ -384,7 +383,7 @@ func testSigningAfterResharing(t *testing.T, suite *E2ETestSuite) {
 	t.Log("Signing after resharing completed")
 }
 
-func testECDSASigningAfterResharing(t *testing.T, suite *E2ETestSuite, walletID, message string, signingResults map[string]*event.SigningResultEvent) {
+func testECDSASigningAfterResharing(t *testing.T, suite *E2ETestSuite, walletID, message string, signingResults map[string]*types.SigningResponse) {
 	t.Logf("Testing ECDSA signing with resharing keys for wallet %s with message: %s", walletID, message)
 
 	// Wait for listener setup
@@ -417,7 +416,7 @@ func testECDSASigningAfterResharing(t *testing.T, suite *E2ETestSuite, walletID,
 		case <-ticker.C:
 			if result, exists := signingResults[txID]; exists {
 				t.Logf("Received ECDSA signing result for wallet %s", walletID)
-				if result.ResultType == event.ResultTypeError {
+				if result.ErrorCode != "" {
 					t.Errorf("ECDSA signing failed for wallet %s: %s (%s)", walletID, result.ErrorReason, result.ErrorCode)
 				} else {
 					t.Logf("ECDSA signing with resharing keys succeeded for wallet %s", walletID)

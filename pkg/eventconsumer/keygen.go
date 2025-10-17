@@ -193,9 +193,8 @@ func (sc *keygenConsumer) handleKeygenEvent(msg jetstream.Msg) {
 }
 
 func (sc *keygenConsumer) handleKeygenError(keygenMsg types.KeygenMessage, errorCode event.ErrorCode, err error, sessionID string) {
-	keygenResult := event.KeygenResultEvent{
-		ResultType:  event.ResultTypeError,
-		ErrorCode:   string(errorCode),
+	keygenResult := types.KeygenResponse{
+		ErrorCode:   errorCode,
 		WalletID:    keygenMsg.WalletID,
 		ErrorReason: err.Error(),
 	}

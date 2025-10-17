@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/fystack/mpcium/pkg/event"
 	"github.com/fystack/mpcium/pkg/logger"
+	"github.com/fystack/mpcium/pkg/types"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -86,12 +86,12 @@ func testKeyGeneration(t *testing.T, suite *E2ETestSuite) {
 	logger.Info(fmt.Sprintf("Generated wallet IDs: %v", walletIDs))
 
 	// Setup result listener
-	err := suite.mpcClient.OnWalletCreationResult(func(result event.KeygenResultEvent) {
-		logger.Info("On wallet creation result", "event", result)
-		t.Logf("Received keygen result for wallet %s: %s", result.WalletID, result.ResultType)
+	err := suite.mpcClient.OnWalletCreationResult(func(result types.KeygenResponse) {
+		logger.Info("On wallet creation result: %+v", result)
+		t.Logf("Received keygen result for wallet %s: %s", result.WalletID, result.ErrorCode)
 		suite.keygenResults[result.WalletID] = &result
 
-		if result.ResultType == event.ResultTypeError {
+		if result.ErrorCode != "" {
 			t.Logf("Keygen failed for wallet %s: %s (%s)", result.WalletID, result.ErrorReason, result.ErrorCode)
 		} else {
 			t.Logf("Keygen succeeded for wallet %s", result.WalletID)
@@ -154,7 +154,7 @@ checkResults:
 			continue
 		}
 
-		if result.ResultType == event.ResultTypeError {
+		if result.ErrorCode != "" {
 			t.Errorf("Keygen failed for wallet %s: %s (%s)", walletID, result.ErrorReason, result.ErrorCode)
 		} else {
 			t.Logf("Keygen succeeded for wallet %s", result.WalletID)

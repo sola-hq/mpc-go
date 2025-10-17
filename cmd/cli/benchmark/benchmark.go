@@ -12,6 +12,7 @@ import (
 
 	"github.com/fystack/mpcium/cmd/cli/utils"
 	"github.com/fystack/mpcium/pkg/client"
+	"github.com/fystack/mpcium/pkg/client/signer"
 	"github.com/fystack/mpcium/pkg/config"
 	"github.com/fystack/mpcium/pkg/logger"
 	"github.com/fystack/mpcium/pkg/messaging"
@@ -46,7 +47,7 @@ var (
 	outputFile     string
 )
 
-func createMPCClient() (client.MPCClient, error) {
+func createMPCClient() (types.Initiator, error) {
 	configPath := ""
 	keyPath := keyPath
 	promptPassword := promptPassword
@@ -76,13 +77,13 @@ func createMPCClient() (client.MPCClient, error) {
 	}
 
 	// Create a LocalSigner with the provided key path and password
-	signerOpts := client.LocalSignerOptions{
+	signerOpts := signer.LocalSignerOptions{
 		KeyPath:  keyPath,
 		Password: password,
 	}
 
 	// Default to Ed25519 for event initiator keys
-	signer, err := client.NewLocalSigner(types.EventInitiatorKeyTypeEd25519, signerOpts)
+	signer, err := signer.NewLocalSigner(types.EventInitiatorKeyTypeEd25519, signerOpts)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create signer: %w", err)
 	}

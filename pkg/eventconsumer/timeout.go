@@ -6,6 +6,7 @@ import (
 	"github.com/fystack/mpcium/pkg/event"
 	"github.com/fystack/mpcium/pkg/logger"
 	"github.com/fystack/mpcium/pkg/messaging"
+	"github.com/fystack/mpcium/pkg/types"
 	"github.com/nats-io/nats.go"
 )
 
@@ -52,33 +53,32 @@ func (tc *timeOutConsumer) Run() {
 			}
 
 			data := failedMsg.Data
-			var signErrorResult event.SigningResultEvent
-			err = json.Unmarshal(data, &signErrorResult)
+			var signResponse types.SigningResponse
+			err = json.Unmarshal(data, &signResponse)
 
 			if err != nil {
 				logger.Error("Failed to unmarshal signing result event", err)
 				return
 			}
 
-			signErrorResult.ResultType = event.ResultTypeError
-			signErrorResult.ErrorCode = event.ErrorCodeMaxDeliveryAttempts
-			signErrorResult.IsTimeout = true
-			signErrorResult.ErrorReason = "Signing failed: maximum delivery attempts exceeded"
+			signResponse.ErrorCode = event.ErrorCodeMaxDeliveryAttempts
+			signResponse.IsTimeout = true
+			signResponse.ErrorReason = "Signing failed: maximum delivery attempts exceeded"
 
-			signErrorResultBytes, err := json.Marshal(signErrorResult)
+			signErrorResultBytes, err := json.Marshal(signResponse)
 			if err != nil {
 				logger.Error("Failed to marshal signing result event", err)
 				return
 			}
 
 			err = tc.resultQueue.Enqueue(event.SigningResultTopic, signErrorResultBytes, &messaging.EnqueueOptions{
-				IdempotentKey: signErrorResult.TxID,
+				IdempotentKey: signResponse.TxID,
 			})
 			if err != nil {
 				logger.Error("Failed to publish signing result event", err)
 				return
 			}
-			logger.Info("Published signing result event for timeout", "txID", signErrorResult.TxID)
+			logger.Info("Published signing result event for timeout", "txID", signResponse.TxID)
 			return
 		}
 	})

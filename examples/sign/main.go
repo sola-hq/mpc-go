@@ -8,8 +8,8 @@ import (
 	"syscall"
 
 	"github.com/fystack/mpcium/pkg/client"
+	"github.com/fystack/mpcium/pkg/client/signer"
 	"github.com/fystack/mpcium/pkg/config"
-	"github.com/fystack/mpcium/pkg/event"
 	"github.com/fystack/mpcium/pkg/logger"
 	"github.com/fystack/mpcium/pkg/messaging"
 	"github.com/fystack/mpcium/pkg/types"
@@ -53,7 +53,7 @@ func main() {
 	defer natsConn.Drain()
 	defer natsConn.Close()
 
-	localSigner, err := client.NewLocalSigner(types.EventInitiatorKeyType(algorithm), client.LocalSignerOptions{
+	localSigner, err := signer.NewLocalSigner(types.EventInitiatorKeyType(algorithm), signer.LocalSignerOptions{
 		KeyPath: "./event_initiator.key",
 	})
 	if err != nil {
@@ -82,10 +82,10 @@ func main() {
 	fmt.Printf("SignTransaction(%q) sent, awaiting result...\n", txID)
 
 	// 3) Listen for signing results
-	err = mpcClient.OnSignResult(func(evt event.SigningResultEvent) {
+	err = mpcClient.OnSignResult(func(response types.SigningResponse) {
 		logger.Info("Signing result received",
-			"txID", evt.TxID,
-			"signature", fmt.Sprintf("%x", evt.Signature),
+			"txID", response.TxID,
+			"signature", fmt.Sprintf("%x", response.Signature),
 		)
 	})
 	if err != nil {

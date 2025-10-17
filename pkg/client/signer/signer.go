@@ -1,4 +1,4 @@
-package client
+package signer
 
 import "github.com/fystack/mpcium/pkg/types"
 

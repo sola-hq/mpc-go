@@ -4,6 +4,7 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/fystack/mpcium/pkg/client/signer"
 	"github.com/fystack/mpcium/pkg/types"
 	"github.com/nats-io/nats.go"
 	"github.com/stretchr/testify/assert"
@@ -30,6 +31,8 @@ func (m *MockSigner) PublicKey() (string, error) {
 	args := m.Called()
 	return args.String(0), args.Error(1)
 }
+
+var _ signer.Signer = &MockSigner{}
 
 // MockNATSConn creates a mock NATS connection for testing
 func MockNATSConn() *nats.Conn {
@@ -72,7 +75,7 @@ func TestMPCClient_CreateWallet(t *testing.T) {
 	mockSigner.On("Sign", mock.AnythingOfType("[]uint8")).Return(testSignature, nil)
 
 	// Create a client instance directly for testing (bypassing NATS setup)
-	client := &mpcClient{
+	client := &initiator{
 		signer: mockSigner,
 	}
 
@@ -107,7 +110,7 @@ func TestMPCClient_CreateWallet_SigningError(t *testing.T) {
 	// Set up signer to return error
 	mockSigner.On("Sign", mock.AnythingOfType("[]uint8")).Return([]byte(nil), errors.New("signing failed"))
 
-	client := &mpcClient{
+	client := &initiator{
 		signer: mockSigner,
 	}
 
@@ -134,7 +137,7 @@ func TestMPCClient_SignTransaction(t *testing.T) {
 	testSignature := []byte("test-transaction-signature")
 	mockSigner.On("Sign", mock.AnythingOfType("[]uint8")).Return(testSignature, nil)
 
-	client := &mpcClient{
+	client := &initiator{
 		signer: mockSigner,
 	}
 
@@ -163,7 +166,7 @@ func TestMPCClient_Resharing(t *testing.T) {
 	testSignature := []byte("test-resharing-signature")
 	mockSigner.On("Sign", mock.AnythingOfType("[]uint8")).Return(testSignature, nil)
 
-	client := &mpcClient{
+	client := &initiator{
 		signer: mockSigner,
 	}
 
@@ -196,16 +199,16 @@ func TestSignerInterface_Compliance(t *testing.T) {
 	mockSigner.On("Sign", []byte("test")).Return([]byte("mock-signature"), nil)
 
 	// Test interface compliance
-	var signer Signer = mockSigner
+	var s signer.Signer = mockSigner
 
-	algorithm := signer.Algorithm()
+	algorithm := s.Algorithm()
 	assert.Equal(t, types.EventInitiatorKeyTypeP256, algorithm)
 
-	pubKey, err := signer.PublicKey()
+	pubKey, err := s.PublicKey()
 	require.NoError(t, err)
 	assert.Equal(t, "mock-public-key-hex", pubKey)
 
-	signature, err := signer.Sign([]byte("test"))
+	signature, err := s.Sign([]byte("test"))
 	require.NoError(t, err)
 	assert.Equal(t, []byte("mock-signature"), signature)
 
@@ -219,16 +222,16 @@ func TestSignerInterface_ErrorHandling(t *testing.T) {
 	mockSigner.On("PublicKey").Return("", errors.New("public key error"))
 	mockSigner.On("Sign", mock.Anything).Return([]byte(nil), errors.New("signing error"))
 
-	var signer Signer = mockSigner
+	var s signer.Signer = mockSigner
 
 	// Test public key error
-	pubKey, err := signer.PublicKey()
+	pubKey, err := s.PublicKey()
 	assert.Error(t, err)
 	assert.Empty(t, pubKey)
 	assert.Contains(t, err.Error(), "public key error")
 
 	// Test signing error
-	signature, err := signer.Sign([]byte("test"))
+	signature, err := s.Sign([]byte("test"))
 	assert.Error(t, err)
 	assert.Nil(t, signature)
 	assert.Contains(t, err.Error(), "signing error")
@@ -278,9 +281,9 @@ func BenchmarkMockSigner_Sign(b *testing.B) {
 }
 
 // Test helper functions
-func createTestMPCClient(signer Signer) *mpcClient {
-	return &mpcClient{
-		signer: signer,
+func createTestMPCClient(s signer.Signer) *initiator {
+	return &initiator{
+		signer: s,
 	}
 }
 

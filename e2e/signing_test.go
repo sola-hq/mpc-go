@@ -7,7 +7,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/fystack/mpcium/pkg/event"
 	"github.com/fystack/mpcium/pkg/logger"
 	"github.com/fystack/mpcium/pkg/types"
 	"github.com/google/uuid"
@@ -137,11 +136,11 @@ func testKeyGenerationForSigning(t *testing.T, suite *E2ETestSuite) {
 	t.Logf("Generated wallet IDs: %v", walletIDs)
 
 	// Setup result listener
-	err := suite.mpcClient.OnWalletCreationResult(func(result event.KeygenResultEvent) {
-		t.Logf("Received keygen result for wallet %s: %s", result.WalletID, result.ResultType)
+	err := suite.mpcClient.OnWalletCreationResult(func(result types.KeygenResponse) {
+		t.Logf("Received keygen result for wallet %s: %s", result.WalletID, result.ErrorCode)
 		suite.keygenResults[result.WalletID] = &result
 
-		if result.ResultType == event.ResultTypeError {
+		if result.ErrorCode != "" {
 			t.Logf("Keygen failed for wallet %s: %s (%s)", result.WalletID, result.ErrorReason, result.ErrorCode)
 		} else {
 			t.Logf("Keygen succeeded for wallet %s", result.WalletID)
@@ -197,7 +196,7 @@ checkResults:
 			continue
 		}
 
-		if result.ResultType == event.ResultTypeError {
+		if result.ErrorCode != "" {
 			t.Errorf("Keygen failed for wallet %s: %s (%s)", walletID, result.ErrorReason, result.ErrorCode)
 		} else {
 			t.Logf("Keygen succeeded for wallet %s", result.WalletID)
@@ -217,13 +216,13 @@ func testSigningAllNodes(t *testing.T, suite *E2ETestSuite) {
 	}
 
 	// Setup a shared signing result listener for all signing tests
-	signingResults := make(map[string]*event.SigningResultEvent)
-	err := suite.mpcClient.OnSignResult(func(result event.SigningResultEvent) {
-		t.Logf("Received signing result for wallet %s (tx: %s): %s", result.WalletID, result.TxID, result.ResultType)
+	signingResults := make(map[string]*types.SigningResponse)
+	err := suite.mpcClient.OnSignResult(func(result types.SigningResponse) {
+		t.Logf("Received signing result for wallet %s (tx: %s): %s", result.WalletID, result.TxID, result.ErrorCode)
 		// Use TxID as key to avoid conflicts between different signing operations
 		signingResults[result.TxID] = &result
 
-		if result.ResultType == event.ResultTypeError {
+		if result.ErrorCode != "" {
 			t.Logf("Signing failed for wallet %s (tx: %s): %s (%s)", result.WalletID, result.TxID, result.ErrorReason, result.ErrorCode)
 		} else {
 			t.Logf("Signing succeeded for wallet %s (tx: %s)", result.WalletID, result.TxID)
@@ -310,12 +309,12 @@ func testECDSASigning(t *testing.T, suite *E2ETestSuite, walletID, message strin
 	t.Logf("Testing ECDSA signing for wallet %s with message: %s", walletID, message)
 
 	// Setup signing result listener
-	signingResults := make(map[string]*event.SigningResultEvent)
-	err := suite.mpcClient.OnSignResult(func(result event.SigningResultEvent) {
-		t.Logf("Received ECDSA signing result for wallet %s: %s", result.WalletID, result.ResultType)
+	signingResults := make(map[string]*types.SigningResponse)
+	err := suite.mpcClient.OnSignResult(func(result types.SigningResponse) {
+		t.Logf("Received ECDSA signing result for wallet %s: %s", result.WalletID, result.ErrorCode)
 		signingResults[result.WalletID] = &result
 
-		if result.ResultType == event.ResultTypeError {
+		if result.ErrorCode != "" {
 			t.Logf("ECDSA signing failed for wallet %s: %s (%s)", result.WalletID, result.ErrorReason, result.ErrorCode)
 		} else {
 			t.Logf("ECDSA signing succeeded for wallet %s", result.WalletID)
@@ -353,7 +352,7 @@ func testECDSASigning(t *testing.T, suite *E2ETestSuite, walletID, message strin
 		case <-ticker.C:
 			if result, exists := signingResults[txID]; exists {
 				logger.Info("Received ECDSA signing result for wallet", "result", result)
-				if result.ResultType == event.ResultTypeError {
+				if result.ErrorCode != "" {
 					t.Errorf("ECDSA signing failed for wallet %s: %s (%s)", walletID, result.ErrorReason, result.ErrorCode)
 				} else {
 					t.Logf("ECDSA signing succeeded for wallet %s", walletID)
@@ -384,12 +383,12 @@ func testEdDSASigning(t *testing.T, suite *E2ETestSuite, walletID, message strin
 	t.Logf("Testing EdDSA signing for wallet %s with message: %s", walletID, message)
 
 	// Setup signing result listener
-	signingResults := make(map[string]*event.SigningResultEvent)
-	err := suite.mpcClient.OnSignResult(func(result event.SigningResultEvent) {
-		t.Logf("Received EdDSA signing result for wallet %s: %s", result.WalletID, result.ResultType)
+	signingResults := make(map[string]*types.SigningResponse)
+	err := suite.mpcClient.OnSignResult(func(result types.SigningResponse) {
+		t.Logf("Received EdDSA signing result for wallet %s: %s", result.WalletID, result.ErrorCode)
 		signingResults[result.WalletID] = &result
 
-		if result.ResultType == event.ResultTypeError {
+		if result.ErrorCode != "" {
 			t.Logf("EdDSA signing failed for wallet %s: %s (%s)", result.WalletID, result.ErrorReason, result.ErrorCode)
 		} else {
 			t.Logf("EdDSA signing succeeded for wallet %s", result.WalletID)
@@ -427,25 +426,27 @@ func testEdDSASigning(t *testing.T, suite *E2ETestSuite, walletID, message strin
 		case <-ticker.C:
 			if result, exists := signingResults[walletID]; exists {
 				logger.Info("Received EdDSA signing result for wallet", "result", result)
-				if result.ResultType == event.ResultTypeError {
+				if result.ErrorCode != "" {
 					t.Errorf("EdDSA signing failed for wallet %s: %s (%s)", walletID, result.ErrorReason, result.ErrorCode)
-				} else {
-					t.Logf("EdDSA signing succeeded for wallet %s", walletID)
-					assert.NotEmpty(t, result.Signature, "EdDSA signature should not be empty for wallet %s", walletID)
-
-					// EdDSA signatures are typically 64 bytes (32 bytes R + 32 bytes S)
-					t.Logf("EdDSA signature length: %d bytes", len(result.Signature))
-					if len(result.Signature) > 0 {
-						assert.Equal(t, 64, len(result.Signature), "EdDSA signature should be 64 bytes for wallet %s", walletID)
-					}
+					return
 				}
+
+				t.Logf("EdDSA signing succeeded for wallet %s", walletID)
+				assert.NotEmpty(t, result.Signature, "EdDSA signature should not be empty for wallet %s", walletID)
+
+				// EdDSA signatures are typically 64 bytes (32 bytes R + 32 bytes S)
+				t.Logf("EdDSA signature length: %d bytes", len(result.Signature))
+				if len(result.Signature) > 0 {
+					assert.Equal(t, 64, len(result.Signature), "EdDSA signature should be 64 bytes for wallet %s", walletID)
+				}
+
 				return
 			}
 		}
 	}
 }
 
-func testECDSASigningWithSharedListener(t *testing.T, suite *E2ETestSuite, walletID, message string, signingResults map[string]*event.SigningResultEvent) {
+func testECDSASigningWithSharedListener(t *testing.T, suite *E2ETestSuite, walletID, message string, signingResults map[string]*types.SigningResponse) {
 	t.Logf("Testing ECDSA signing for wallet %s with message: %s", walletID, message)
 
 	// Wait for listener setup
@@ -478,7 +479,7 @@ func testECDSASigningWithSharedListener(t *testing.T, suite *E2ETestSuite, walle
 		case <-ticker.C:
 			if result, exists := signingResults[txID]; exists {
 				logger.Info("Received ECDSA signing result for wallet", "result", result)
-				if result.ResultType == event.ResultTypeError {
+				if result.ErrorCode != "" {
 					t.Errorf("ECDSA signing failed for wallet %s: %s (%s)", walletID, result.ErrorReason, result.ErrorCode)
 				} else {
 					t.Logf("ECDSA signing succeeded for wallet %s", walletID)
@@ -505,7 +506,7 @@ func testECDSASigningWithSharedListener(t *testing.T, suite *E2ETestSuite, walle
 	}
 }
 
-func testEdDSASigningWithSharedListener(t *testing.T, suite *E2ETestSuite, walletID, message string, signingResults map[string]*event.SigningResultEvent) {
+func testEdDSASigningWithSharedListener(t *testing.T, suite *E2ETestSuite, walletID, message string, signingResults map[string]*types.SigningResponse) {
 	t.Logf("Testing EdDSA signing for wallet %s with message: %s", walletID, message)
 
 	// Wait for listener setup
@@ -538,7 +539,7 @@ func testEdDSASigningWithSharedListener(t *testing.T, suite *E2ETestSuite, walle
 		case <-ticker.C:
 			if result, exists := signingResults[txID]; exists {
 				logger.Info("Received EdDSA signing result for wallet", "result", result)
-				if result.ResultType == event.ResultTypeError {
+				if result.ErrorCode != "" {
 					t.Errorf("EdDSA signing failed for wallet %s: %s (%s)", walletID, result.ErrorReason, result.ErrorCode)
 				} else {
 					t.Logf("EdDSA signing succeeded for wallet %s", walletID)

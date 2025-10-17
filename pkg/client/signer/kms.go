@@ -1,4 +1,4 @@
-package client
+package signer
 
 import (
 	"context"
@@ -22,6 +22,8 @@ type KMSSigner struct {
 	keyID     string
 	publicKey *ecdsa.PublicKey
 }
+
+var _ Signer = &KMSSigner{}
 
 // KMSSignerOptions defines options for creating a KMSSigner
 type KMSSignerOptions struct {

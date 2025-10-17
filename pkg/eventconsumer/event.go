@@ -184,7 +184,9 @@ func (ec *eventConsumer) handleKeyGenEvent(natMsg *nats.Msg) {
 	ctxEcdsa, doneEcdsa := context.WithCancel(baseCtx)
 	ctxEddsa, doneEddsa := context.WithCancel(baseCtx)
 
-	successEvent := &event.KeygenResultEvent{WalletID: walletID, ResultType: event.ResultTypeSuccess}
+	keygenResponse := &types.KeygenResponse{
+		WalletID: walletID,
+	}
 	var wg sync.WaitGroup
 	wg.Add(2)
 
@@ -195,7 +197,7 @@ func (ec *eventConsumer) handleKeyGenEvent(natMsg *nats.Msg) {
 		defer wg.Done()
 		select {
 		case <-ctxEcdsa.Done():
-			successEvent.ECDSAPubKey = ecdsaSession.GetPubKeyResult()
+			keygenResponse.ECDSAPubKey = ecdsaSession.GetPubKeyResult()
 		case err := <-ecdsaSession.GetErrChan():
 			logger.Error("ECDSA keygen session error", err)
 			ec.handleKeygenSessionError(walletID, err, "ECDSA keygen session error", natMsg)
@@ -207,7 +209,7 @@ func (ec *eventConsumer) handleKeyGenEvent(natMsg *nats.Msg) {
 		defer wg.Done()
 		select {
 		case <-ctxEddsa.Done():
-			successEvent.EDDSAPubKey = eddsaSession.GetPubKeyResult()
+			keygenResponse.EDDSAPubKey = eddsaSession.GetPubKeyResult()
 		case err := <-eddsaSession.GetErrChan():
 			logger.Error("EdDSA keygen session error", err)
 			ec.handleKeygenSessionError(walletID, err, "EdDSA keygen session error", natMsg)
@@ -248,7 +250,7 @@ func (ec *eventConsumer) handleKeyGenEvent(natMsg *nats.Msg) {
 		return
 	}
 
-	payload, err := json.Marshal(successEvent)
+	payload, err := json.Marshal(keygenResponse)
 	if err != nil {
 		logger.Error("Failed to marshal keygen success event", err)
 		ec.handleKeygenSessionError(walletID, err, "Failed to marshal keygen success event", natMsg)
@@ -273,9 +275,8 @@ func (ec *eventConsumer) handleKeyGenEvent(natMsg *nats.Msg) {
 func (ec *eventConsumer) handleKeygenSessionError(walletID string, err error, contextMsg string, natMsg *nats.Msg) {
 	fullErrMsg := fmt.Sprintf("%s: %v", contextMsg, err)
 	errorCode := event.GetErrorCodeFromError(err)
-	keygenResult := event.KeygenResultEvent{
-		ResultType:  event.ResultTypeError,
-		ErrorCode:   string(errorCode),
+	keygenResult := types.KeygenResponse{
+		ErrorCode:   errorCode,
 		WalletID:    walletID,
 		ErrorReason: fullErrMsg,
 	}
@@ -514,8 +515,7 @@ func (ec *eventConsumer) handleSigningSessionError(walletID, txID string, err er
 		"context", contextMsg,
 	)
 
-	signingResult := event.SigningResultEvent{
-		ResultType:  event.ResultTypeError,
+	signingResult := types.SigningResponse{
 		ErrorCode:   errorCode,
 		WalletID:    walletID,
 		TxID:        txID,
@@ -627,11 +627,10 @@ func (ec *eventConsumer) consumeResharingEvent() error {
 		ctx := context.Background()
 		var wg sync.WaitGroup
 
-		successEvent := &event.ResharingResultEvent{
+		resharingResponse := &types.ResharingResponse{
 			WalletID:     walletID,
 			NewThreshold: msg.NewThreshold,
 			KeyType:      msg.KeyType,
-			ResultType:   event.ResultTypeSuccess,
 		}
 
 		if oldSession != nil {
@@ -688,7 +687,7 @@ func (ec *eventConsumer) consumeResharingEvent() error {
 				for {
 					select {
 					case <-ctxNew.Done():
-						successEvent.PubKey = newSession.GetPubKeyResult()
+						resharingResponse.PubKey = newSession.GetPubKeyResult()
 						return
 					case err := <-newSession.GetErrChan():
 						logger.Error("New reshare session error", err)
@@ -701,10 +700,10 @@ func (ec *eventConsumer) consumeResharingEvent() error {
 		}
 
 		wg.Wait()
-		logger.Info("Reshare session finished", "walletID", walletID, "pubKey", fmt.Sprintf("%x", successEvent.PubKey))
+		logger.Info("Reshare session finished", "walletID", walletID, "pubKey", fmt.Sprintf("%x", resharingResponse.PubKey))
 
 		if newSession != nil {
-			successBytes, err := json.Marshal(successEvent)
+			resharingResponseBytes, err := json.Marshal(resharingResponse)
 			if err != nil {
 				logger.Error("Failed to marshal resharing success event", err)
 				ec.handleResharingSessionError(walletID, keyType, msg.NewThreshold, err, "Failed to marshal reshare success event", natMsg)
@@ -714,7 +713,7 @@ func (ec *eventConsumer) consumeResharingEvent() error {
 			key := fmt.Sprintf(core.TypeResharingWalletResultFmt, msg.SessionID)
 			err = ec.resharingResultQueue.Enqueue(
 				key,
-				successBytes,
+				resharingResponseBytes,
 				&messaging.EnqueueOptions{
 					IdempotentKey: composeResharingResultIdempotentKey(msg.SessionID, natMsg),
 				})
@@ -754,9 +753,8 @@ func (ec *eventConsumer) handleResharingSessionError(
 		"context", contextMsg,
 	)
 
-	resharingResult := event.ResharingResultEvent{
-		ResultType:   event.ResultTypeError,
-		ErrorCode:    string(errorCode),
+	resharingResult := types.ResharingResponse{
+		ErrorCode:    errorCode,
 		WalletID:     walletID,
 		KeyType:      keyType,
 		NewThreshold: newThreshold,

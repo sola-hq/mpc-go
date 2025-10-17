@@ -76,7 +76,7 @@ func NewECDSAResharingSession(
 		ComposeKey: func(walletID string) string {
 			return fmt.Sprintf("ecdsa:%s", walletID)
 		},
-		GetRoundFunc:  GetEcdsaMsgRound,
+		GetRoundFunc:  GetMsgRound,
 		ResultQueue:   resultQueue,
 		SessionType:   core.SessionTypeECDSA,
 		IdentityStore: identityStore,

@@ -8,8 +8,8 @@ import (
 	"syscall"
 
 	"github.com/fystack/mpcium/pkg/client"
+	"github.com/fystack/mpcium/pkg/client/signer"
 	"github.com/fystack/mpcium/pkg/config"
-	"github.com/fystack/mpcium/pkg/event"
 	"github.com/fystack/mpcium/pkg/logger"
 	"github.com/fystack/mpcium/pkg/messaging"
 	"github.com/fystack/mpcium/pkg/types"
@@ -53,7 +53,7 @@ func main() {
 	defer natsConn.Drain()
 	defer natsConn.Close()
 
-	localSigner, err := client.NewLocalSigner(types.EventInitiatorKeyType(algorithm), client.LocalSignerOptions{
+	localSigner, err := signer.NewLocalSigner(types.EventInitiatorKeyType(algorithm), signer.LocalSignerOptions{
 		KeyPath: "./event_initiator.key",
 	})
 	if err != nil {
@@ -66,12 +66,12 @@ func main() {
 	})
 
 	// 3) Listen for signing results
-	err = mpcClient.OnResharingResult(func(evt event.ResharingResultEvent) {
+	err = mpcClient.OnResharingResult(func(result types.ResharingResponse) {
 		logger.Info("Resharing result received",
-			"walletID", evt.WalletID,
-			"pubKey", fmt.Sprintf("%x", evt.PubKey),
-			"newThreshold", evt.NewThreshold,
-			"keyType", evt.KeyType,
+			"walletID", result.WalletID,
+			"pubKey", fmt.Sprintf("%x", result.PubKey),
+			"newThreshold", result.NewThreshold,
+			"keyType", result.KeyType,
 		)
 	})
 	if err != nil {

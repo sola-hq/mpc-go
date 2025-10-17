@@ -18,6 +18,7 @@ import (
 	"github.com/fystack/mpcium/pkg/logger"
 	"github.com/fystack/mpcium/pkg/messaging"
 	"github.com/fystack/mpcium/pkg/mpc/core"
+	"github.com/fystack/mpcium/pkg/types"
 	"github.com/samber/lo"
 )
 
@@ -71,7 +72,7 @@ func NewECDSASigningSession(
 			ComposeKey: func(waleltID string) string {
 				return fmt.Sprintf("ecdsa:%s", waleltID)
 			},
-			GetRoundFunc:  GetEcdsaMsgRound,
+			GetRoundFunc:  GetMsgRound,
 			ResultQueue:   resultQueue,
 			IdentityStore: identityStore,
 			IdempotentKey: idempotentKey,
@@ -155,8 +156,7 @@ func (s *ecdsaSigningSession) Sign(onSuccess func(data []byte)) {
 				return
 			}
 
-			r := event.SigningResultEvent{
-				ResultType:        event.ResultTypeSuccess,
+			r := types.SigningResponse{
 				WalletID:          s.WalletID,
 				TxID:              s.txID,
 				R:                 sig.R,

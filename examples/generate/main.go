@@ -13,8 +13,8 @@ import (
 	"time"
 
 	"github.com/fystack/mpcium/pkg/client"
+	"github.com/fystack/mpcium/pkg/client/signer"
 	"github.com/fystack/mpcium/pkg/config"
-	"github.com/fystack/mpcium/pkg/event"
 	"github.com/fystack/mpcium/pkg/logger"
 	"github.com/fystack/mpcium/pkg/messaging"
 	"github.com/fystack/mpcium/pkg/types"
@@ -62,7 +62,7 @@ func main() {
 	defer natsConn.Drain()
 	defer natsConn.Close()
 
-	localSigner, err := client.NewLocalSigner(types.EventInitiatorKeyType(algorithm), client.LocalSignerOptions{
+	localSigner, err := signer.NewLocalSigner(types.EventInitiatorKeyType(algorithm), signer.LocalSignerOptions{
 		KeyPath: "./event_initiator.key",
 	})
 	if err != nil {
@@ -93,10 +93,10 @@ func main() {
 	}
 
 	// STEP 2: Register the result handler AFTER all walletIDs are stored
-	err = mpcClient.OnWalletCreationResult(func(event event.KeygenResultEvent) {
-		logger.Info("Received wallet creation result", "event", event)
+	err = mpcClient.OnWalletCreationResult(func(response types.KeygenResponse) {
+		logger.Info("Received wallet creation result", "response", response)
 		now := time.Now()
-		startTimeAny, ok := walletStartTimes.Load(event.WalletID)
+		startTimeAny, ok := walletStartTimes.Load(response.WalletID)
 		if ok {
 			startTime := startTimeAny.(time.Time)
 			duration := now.Sub(startTime).Seconds()
@@ -104,15 +104,15 @@ func main() {
 			countSoFar := atomic.AddInt32(&completedCount, 1)
 
 			logger.Info("Wallet created",
-				"walletID", event.WalletID,
+				"walletID", response.WalletID,
 				"duration_seconds", fmt.Sprintf("%.3f", duration),
 				"accumulated_time_seconds", fmt.Sprintf("%.3f", accumulated),
 				"count_so_far", countSoFar,
 			)
 
-			walletStartTimes.Delete(event.WalletID)
+			walletStartTimes.Delete(response.WalletID)
 		} else {
-			logger.Warn("Received wallet result but no start time found", "walletID", event.WalletID)
+			logger.Warn("Received wallet result but no start time found", "walletID", response.WalletID)
 		}
 		wg.Done()
 	})

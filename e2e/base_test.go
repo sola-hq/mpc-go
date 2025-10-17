@@ -16,7 +16,7 @@ import (
 	"github.com/dgraph-io/badger/v4"
 	"github.com/dgraph-io/badger/v4/options"
 	"github.com/fystack/mpcium/pkg/client"
-	"github.com/fystack/mpcium/pkg/event"
+	"github.com/fystack/mpcium/pkg/client/signer"
 	"github.com/fystack/mpcium/pkg/kvstore"
 	"github.com/fystack/mpcium/pkg/types"
 	"github.com/hashicorp/consul/api"
@@ -51,13 +51,13 @@ type E2ETestSuite struct {
 	ctx              context.Context
 	consulClient     *api.Client
 	natsConn         *nats.Conn
-	mpcClient        client.MPCClient
+	mpcClient        types.Initiator
 	testDir          string
 	walletIDs        []string
 	mpProcesses      []*exec.Cmd
-	keygenResults    map[string]*event.KeygenResultEvent
-	signingResults   map[string]*event.SigningResultEvent
-	resharingResults map[string]*event.ResharingResultEvent
+	keygenResults    map[string]*types.KeygenResponse
+	signingResults   map[string]*types.SigningResponse
+	resharingResults map[string]*types.ResharingResponse
 	config           TestConfig
 }
 
@@ -67,9 +67,9 @@ func NewE2ETestSuite(testDir string) *E2ETestSuite {
 		ctx:              ctx,
 		testDir:          testDir,
 		walletIDs:        make([]string, 0),
-		keygenResults:    make(map[string]*event.KeygenResultEvent),
-		signingResults:   make(map[string]*event.SigningResultEvent),
-		resharingResults: make(map[string]*event.ResharingResultEvent),
+		keygenResults:    make(map[string]*types.KeygenResponse),
+		signingResults:   make(map[string]*types.SigningResponse),
+		resharingResults: make(map[string]*types.ResharingResponse),
 	}
 }
 
@@ -186,7 +186,7 @@ func (s *E2ETestSuite) SetupMPCClient(t *testing.T) {
 	}
 
 	// Create local signer for Ed25519 (default for E2E tests)
-	localSigner, err := client.NewLocalSigner(types.EventInitiatorKeyTypeEd25519, client.LocalSignerOptions{
+	localSigner, err := signer.NewLocalSigner(types.EventInitiatorKeyTypeEd25519, signer.LocalSignerOptions{
 		KeyPath: keyPath,
 	})
 	if err != nil {

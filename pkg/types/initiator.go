@@ -1,6 +1,8 @@
 package types
 
-import "encoding/json"
+import (
+	"encoding/json"
+)
 
 type KeyType string
 
@@ -16,6 +18,17 @@ const (
 	EventInitiatorKeyTypeP256    EventInitiatorKeyType = "p256"
 )
 
+type Initiator interface {
+	CreateWallet(walletID string) error
+	OnWalletCreationResult(callback func(event KeygenResponse)) error
+
+	SignTransaction(msg *SigningMessage) error
+	OnSignResult(callback func(event SigningResponse)) error
+
+	Resharing(msg *ResharingMessage) error
+	OnResharingResult(callback func(result ResharingResponse)) error
+}
+
 // InitiatorMessage is anything that carries a payload to verify and its signature.
 type InitiatorMessage interface {
 	// Raw returns the canonical byte‐slice that was signed.
@@ -24,28 +37,6 @@ type InitiatorMessage interface {
 	Sig() []byte
 	// InitiatorID returns the ID whose public key we have to look up.
 	InitiatorID() string
-}
-
-type KeygenMessage struct {
-	WalletID  string `json:"wallet_id"`
-	Signature []byte `json:"signature"`
-}
-
-type SigningMessage struct {
-	KeyType   KeyType `json:"key_type"`
-	WalletID  string  `json:"wallet_id"`
-	TxID      string  `json:"tx_id"`
-	Tx        []byte  `json:"tx"`
-	Signature []byte  `json:"signature"`
-}
-
-type ResharingMessage struct {
-	SessionID    string   `json:"session_id"`
-	NodeIDs      []string `json:"node_ids"` // new peer IDs
-	NewThreshold int      `json:"new_threshold"`
-	KeyType      KeyType  `json:"key_type"`
-	WalletID     string   `json:"wallet_id"`
-	Signature    []byte   `json:"signature,omitempty"`
 }
 
 func (m *SigningMessage) Raw() ([]byte, error) {

@@ -5,7 +5,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/fystack/mpcium/pkg/event"
+	"github.com/fystack/mpcium/pkg/types"
 	"github.com/spf13/cobra"
 )
 
@@ -56,7 +56,7 @@ func runKeygenBenchmark(cmd *cobra.Command, args []string) error {
 	var mu sync.Mutex
 
 	// Set up result listener
-	err = mpcClient.OnWalletCreationResult(func(result event.KeygenResultEvent) {
+	err = mpcClient.OnWalletCreationResult(func(result types.KeygenResponse) {
 		mu.Lock()
 		defer mu.Unlock()
 
@@ -64,8 +64,7 @@ func runKeygenBenchmark(cmd *cobra.Command, args []string) error {
 			if results[i].ID == result.WalletID && !results[i].Completed {
 				results[i].EndTime = time.Now()
 				results[i].Completed = true
-				results[i].Success = result.ResultType == event.ResultTypeSuccess
-				if !results[i].Success {
+				if results[i].ErrorCode != "" {
 					results[i].ErrorReason = result.ErrorReason
 					results[i].ErrorCode = result.ErrorCode
 				}

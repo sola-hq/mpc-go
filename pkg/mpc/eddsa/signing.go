@@ -18,6 +18,7 @@ import (
 	"github.com/fystack/mpcium/pkg/logger"
 	"github.com/fystack/mpcium/pkg/messaging"
 	"github.com/fystack/mpcium/pkg/mpc/core"
+	"github.com/fystack/mpcium/pkg/types"
 	"github.com/samber/lo"
 )
 
@@ -152,11 +153,10 @@ func (s *eddsaSigningSession) Sign(onSuccess func(data []byte)) {
 				return
 			}
 
-			r := event.SigningResultEvent{
-				ResultType: event.ResultTypeSuccess,
-				WalletID:   s.WalletID,
-				TxID:       s.txID,
-				Signature:  sig.Signature,
+			r := types.SigningResponse{
+				WalletID:  s.WalletID,
+				TxID:      s.txID,
+				Signature: sig.Signature,
 			}
 
 			bytes, err := json.Marshal(r)

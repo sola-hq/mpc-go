@@ -1,4 +1,4 @@
-package client
+package signer
 
 import (
 	"crypto/ecdsa"
@@ -21,6 +21,8 @@ type LocalSigner struct {
 	ed25519Key ed25519.PrivateKey
 	p256Key    *ecdsa.PrivateKey
 }
+
+var _ Signer = &LocalSigner{}
 
 // LocalSignerOptions defines options for creating a LocalSigner
 type LocalSignerOptions struct {
