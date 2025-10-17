@@ -69,7 +69,7 @@ func NewEDDSASigningSession(
 			ComposeKey: func(waleltID string) string {
 				return fmt.Sprintf("eddsa:%s", waleltID)
 			},
-			GetRoundFunc:  GetEddsaMsgRound,
+			GetRoundFunc:  GetMsgRound,
 			ResultQueue:   resultQueue,
 			IdentityStore: identityStore,
 			IdempotentKey: idempotentKey,

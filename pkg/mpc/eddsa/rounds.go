@@ -10,24 +10,24 @@ import (
 )
 
 const (
-	EDDSA_KEYGEN1            = "KGRound1Message"
-	EDDSA_KEYGEN2aUnicast    = "KGRound2Message1"
-	EDDSA_KEYGEN2b           = "KGRound2Message2"
-	EDDSA_KEYSIGN1           = "SignRound1Message"
-	EDDSA_KEYSIGN2           = "SignRound2Message"
-	EDDSA_KEYSIGN3           = "SignRound3Message"
-	EDDSA_RESHARING1         = "DGRound1Message"
-	EDDSA_RESHARING2         = "DGRound2Message"
-	EDDSA_RESHARING3aUnicast = "DGRound3Message1"
-	EDDSA_RESHARING3bUnicast = "DGRound3Message2"
-	EDDSA_RESHARING4         = "DGRound4Message"
+	KEYGEN1            = "KGRound1Message"
+	KEYGEN2aUnicast    = "KGRound2Message1"
+	KEYGEN2b           = "KGRound2Message2"
+	KEYSIGN1           = "SignRound1Message"
+	KEYSIGN2           = "SignRound2Message"
+	KEYSIGN3           = "SignRound3Message"
+	RESHARING1         = "DGRound1Message"
+	RESHARING2         = "DGRound2Message"
+	RESHARING3aUnicast = "DGRound3Message1"
+	RESHARING3bUnicast = "DGRound3Message2"
+	RESHARING4         = "DGRound4Message"
 
-	EDDSA_TSSKEYGENROUNDS  = 3
-	EDDSA_TSSKEYSIGNROUNDS = 3
-	EDDSA_RESHARINGROUNDS  = 4
+	TSSKEYGENROUNDS    = 3
+	TSSKEYSIGNROUNDS   = 3
+	TSSRESHARINGROUNDS = 4
 )
 
-func GetEddsaMsgRound(msg []byte, partyID *tss.PartyID, isBroadcast bool) (core.RoundInfo, error) {
+func GetMsgRound(msg []byte, partyID *tss.PartyID, isBroadcast bool) (core.RoundInfo, error) {
 	parsedMsg, err := tss.ParseWireMessage(msg, partyID, isBroadcast)
 	if err != nil {
 		return core.RoundInfo{}, err
@@ -36,67 +36,67 @@ func GetEddsaMsgRound(msg []byte, partyID *tss.PartyID, isBroadcast bool) (core.
 	case *keygen.KGRound1Message:
 		return core.RoundInfo{
 			Index:    0,
-			RoundMsg: EDDSA_KEYGEN1,
+			RoundMsg: KEYGEN1,
 		}, nil
 
 	case *keygen.KGRound2Message1:
 		return core.RoundInfo{
 			Index:    1,
-			RoundMsg: EDDSA_KEYGEN2aUnicast,
+			RoundMsg: KEYGEN2aUnicast,
 		}, nil
 
 	case *keygen.KGRound2Message2:
 		return core.RoundInfo{
 			Index:    2,
-			RoundMsg: EDDSA_KEYGEN2b,
+			RoundMsg: KEYGEN2b,
 		}, nil
 
 	case *signing.SignRound1Message:
 		return core.RoundInfo{
 			Index:    0,
-			RoundMsg: EDDSA_KEYSIGN1,
+			RoundMsg: KEYSIGN1,
 		}, nil
 
 	case *signing.SignRound2Message:
 		return core.RoundInfo{
 			Index:    0,
-			RoundMsg: EDDSA_KEYSIGN2,
+			RoundMsg: KEYSIGN2,
 		}, nil
 
 	case *signing.SignRound3Message:
 		return core.RoundInfo{
 			Index:    0,
-			RoundMsg: EDDSA_KEYSIGN3,
+			RoundMsg: KEYSIGN3,
 		}, nil
 
 	case *resharing.DGRound1Message:
 		return core.RoundInfo{
 			Index:    0,
-			RoundMsg: EDDSA_RESHARING1,
+			RoundMsg: RESHARING1,
 		}, nil
 
 	case *resharing.DGRound2Message:
 		return core.RoundInfo{
 			Index:    1,
-			RoundMsg: EDDSA_RESHARING2,
+			RoundMsg: RESHARING2,
 		}, nil
 
 	case *resharing.DGRound3Message1:
 		return core.RoundInfo{
 			Index:    2,
-			RoundMsg: EDDSA_RESHARING3aUnicast,
+			RoundMsg: RESHARING3aUnicast,
 		}, nil
 
 	case *resharing.DGRound3Message2:
 		return core.RoundInfo{
 			Index:    3,
-			RoundMsg: EDDSA_RESHARING3bUnicast,
+			RoundMsg: RESHARING3bUnicast,
 		}, nil
 
 	case *resharing.DGRound4Message:
 		return core.RoundInfo{
 			Index:    4,
-			RoundMsg: EDDSA_RESHARING4,
+			RoundMsg: RESHARING4,
 		}, nil
 
 	default:
