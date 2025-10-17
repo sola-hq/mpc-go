@@ -26,12 +26,12 @@ type InitiatorMessage interface {
 	InitiatorID() string
 }
 
-type GenerateKeyMessage struct {
+type KeygenMessage struct {
 	WalletID  string `json:"wallet_id"`
 	Signature []byte `json:"signature"`
 }
 
-type SignTxMessage struct {
+type SigningMessage struct {
 	KeyType             KeyType `json:"key_type"`
 	WalletID            string  `json:"wallet_id"`
 	NetworkInternalCode string  `json:"network_internal_code"`
@@ -49,7 +49,7 @@ type ResharingMessage struct {
 	Signature    []byte   `json:"signature,omitempty"`
 }
 
-func (m *SignTxMessage) Raw() ([]byte, error) {
+func (m *SigningMessage) Raw() ([]byte, error) {
 	// omit the Signature field itself when computing the signed‐over data
 	payload := struct {
 		KeyType             KeyType `json:"key_type"`
@@ -67,23 +67,23 @@ func (m *SignTxMessage) Raw() ([]byte, error) {
 	return json.Marshal(payload)
 }
 
-func (m *SignTxMessage) Sig() []byte {
+func (m *SigningMessage) Sig() []byte {
 	return m.Signature
 }
 
-func (m *SignTxMessage) InitiatorID() string {
+func (m *SigningMessage) InitiatorID() string {
 	return m.TxID
 }
 
-func (m *GenerateKeyMessage) Raw() ([]byte, error) {
+func (m *KeygenMessage) Raw() ([]byte, error) {
 	return []byte(m.WalletID), nil
 }
 
-func (m *GenerateKeyMessage) Sig() []byte {
+func (m *KeygenMessage) Sig() []byte {
 	return m.Signature
 }
 
-func (m *GenerateKeyMessage) InitiatorID() string {
+func (m *KeygenMessage) InitiatorID() string {
 	return m.WalletID
 }
 

@@ -17,7 +17,7 @@ type MPCClient interface {
 	CreateWallet(walletID string) error
 	OnWalletCreationResult(callback func(event event.KeygenResultEvent)) error
 
-	SignTransaction(msg *types.SignTxMessage) error
+	SignTransaction(msg *types.SigningMessage) error
 	OnSignResult(callback func(event event.SigningResultEvent)) error
 
 	Resharing(msg *types.ResharingMessage) error
@@ -100,7 +100,7 @@ func NewMPCClient(opts Options) MPCClient {
 // CreateWallet generates a GenerateKeyMessage, signs it, and publishes it.
 func (c *mpcClient) CreateWallet(walletID string) error {
 	// build the message
-	msg := &types.GenerateKeyMessage{
+	msg := &types.KeygenMessage{
 		WalletID: walletID,
 	}
 	// compute the canonical raw bytes
@@ -145,7 +145,7 @@ func (c *mpcClient) OnWalletCreationResult(callback func(event event.KeygenResul
 }
 
 // SignTransaction builds a SignTxMessage, signs it, and publishes it.
-func (c *mpcClient) SignTransaction(msg *types.SignTxMessage) error {
+func (c *mpcClient) SignTransaction(msg *types.SigningMessage) error {
 	// compute the canonical raw bytes (omitting Signature field)
 	raw, err := msg.Raw()
 	if err != nil {

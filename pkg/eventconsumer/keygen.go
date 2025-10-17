@@ -123,7 +123,7 @@ func (sc *keygenConsumer) Run(ctx context.Context) error {
 
 func (sc *keygenConsumer) handleKeygenEvent(msg jetstream.Msg) {
 	raw := msg.Data()
-	var keygenMsg types.GenerateKeyMessage
+	var keygenMsg types.KeygenMessage
 	sessionID := msg.Headers().Get("SessionID")
 
 	err := json.Unmarshal(raw, &keygenMsg)
@@ -192,7 +192,7 @@ func (sc *keygenConsumer) handleKeygenEvent(msg jetstream.Msg) {
 	_ = msg.Nak()
 }
 
-func (sc *keygenConsumer) handleKeygenError(keygenMsg types.GenerateKeyMessage, errorCode event.ErrorCode, err error, sessionID string) {
+func (sc *keygenConsumer) handleKeygenError(keygenMsg types.KeygenMessage, errorCode event.ErrorCode, err error, sessionID string) {
 	keygenResult := event.KeygenResultEvent{
 		ResultType:  event.ResultTypeError,
 		ErrorCode:   string(errorCode),

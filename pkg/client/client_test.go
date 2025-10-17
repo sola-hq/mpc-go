@@ -86,7 +86,7 @@ func TestMPCClient_CreateWallet(t *testing.T) {
 	// but we can test the signing part by calling it directly
 
 	// Simulate what CreateWallet does with signing
-	msg := &types.GenerateKeyMessage{
+	msg := &types.KeygenMessage{
 		WalletID: walletID,
 	}
 
@@ -112,7 +112,7 @@ func TestMPCClient_CreateWallet_SigningError(t *testing.T) {
 	}
 
 	// Simulate the signing part that would happen in CreateWallet
-	msg := &types.GenerateKeyMessage{
+	msg := &types.KeygenMessage{
 		WalletID: "test-wallet",
 	}
 
@@ -139,7 +139,7 @@ func TestMPCClient_SignTransaction(t *testing.T) {
 	}
 
 	// Test signing part of SignTransaction
-	msg := &types.SignTxMessage{
+	msg := &types.SigningMessage{
 		KeyType:             types.KeyTypeSecp256k1,
 		WalletID:            "test-wallet",
 		NetworkInternalCode: "btc-mainnet",

@@ -16,6 +16,7 @@ import (
 	"github.com/fystack/mpcium/pkg/messaging"
 	"github.com/fystack/mpcium/pkg/mpc"
 	"github.com/fystack/mpcium/pkg/mpc/core"
+	"github.com/fystack/mpcium/pkg/session"
 	"github.com/fystack/mpcium/pkg/types"
 	"github.com/nats-io/nats.go"
 	"github.com/spf13/viper"
@@ -57,13 +58,9 @@ type eventConsumer struct {
 	maxConcurrentKeygen  int
 	maxConcurrentSigning int
 
-	// Track active sessions with timestamps for session cleanup routine
-	activeSessions       map[string]time.Time // Maps "walletID-txID" to creation time
-	sessionsLock         sync.RWMutex
+	// Session management
+	sessionMgr           *session.Manager
 	sessionWarmUpDelayMs int
-	sessionInterval      time.Duration // How often to run session cleanup routine
-	sessionTimeout       time.Duration // How long before a session is considered stale
-	sessionStopChan      chan struct{} // Signal to stop session cleanup routine
 }
 
 func NewEventConsumer(
@@ -99,16 +96,19 @@ func NewEventConsumer(
 		sessionWarmUpDelayMs,
 	)
 
+	// Create session manager
+	sessionMgr := session.NewManager(
+		5*time.Minute,  // session cleanup interval
+		30*time.Minute, // session stale timeout
+	)
+
 	ec := &eventConsumer{
 		node:                 node,
 		pubsub:               pubsub,
 		keygenResultQueue:    keygenResultQueue,
 		signingResultQueue:   signingResultQueue,
 		resharingResultQueue: resharingResultQueue,
-		activeSessions:       make(map[string]time.Time),
-		sessionInterval:      5 * time.Minute,     // Run cleanup every 5 minutes
-		sessionTimeout:       30 * time.Minute,    // Consider sessions older than 30 minutes stale
-		sessionStopChan:      make(chan struct{}), // Signal to stop session cleanup routine
+		sessionMgr:           sessionMgr,
 		mpcThreshold:         viper.GetInt("mpc_threshold"),
 		maxConcurrentKeygen:  maxConcurrentKeygen,
 		maxConcurrentSigning: maxConcurrentSigning,
@@ -120,8 +120,8 @@ func NewEventConsumer(
 
 	go ec.startKeyGenEventWorker()
 	go ec.startSigningEventWorker()
-	// Start background cleanup goroutine
-	go ec.sessionCleanupRoutine()
+	// Start session cleanup routine
+	go ec.sessionMgr.StartCleanup()
 
 	return ec
 }
@@ -154,7 +154,7 @@ func (ec *eventConsumer) handleKeyGenEvent(natMsg *nats.Msg) {
 	defer baseCancel()
 
 	raw := natMsg.Data
-	var msg types.GenerateKeyMessage
+	var msg types.KeygenMessage
 	if err := json.Unmarshal(raw, &msg); err != nil {
 		logger.Error("Failed to unmarshal keygen message", err)
 		ec.handleKeygenSessionError(msg.WalletID, err, "Failed to unmarshal keygen message", natMsg)
@@ -341,7 +341,7 @@ func (ec *eventConsumer) consumeKeyGenerationEvent() error {
 
 func (ec *eventConsumer) handleSigningEvent(natMsg *nats.Msg) {
 	raw := natMsg.Data
-	var msg types.SignTxMessage
+	var msg types.SigningMessage
 	err := json.Unmarshal(raw, &msg)
 	if err != nil {
 		logger.Error("Failed to unmarshal signing message", err)
@@ -367,7 +367,7 @@ func (ec *eventConsumer) handleSigningEvent(natMsg *nats.Msg) {
 	)
 
 	// Check for duplicate session and track if new
-	if ec.checkDuplicateSession(msg.WalletID, msg.TxID) {
+	if ec.sessionMgr.CheckDuplicateSession(msg.WalletID, msg.TxID) {
 		duplicateErr := fmt.Errorf("duplicate signing request detected for walletID=%s txID=%s", msg.WalletID, msg.TxID)
 		ec.handleSigningSessionError(
 			msg.WalletID,
@@ -453,7 +453,7 @@ func (ec *eventConsumer) handleSigningEvent(natMsg *nats.Msg) {
 	}
 
 	// Mark session as already processed
-	ec.addSession(msg.WalletID, msg.TxID)
+	ec.sessionMgr.AddSession(msg.WalletID, msg.TxID)
 
 	ctx, done := context.WithCancel(context.Background())
 	go func() {
@@ -789,64 +789,8 @@ func (ec *eventConsumer) handleResharingSessionError(
 	}
 }
 
-// Add a cleanup routine that runs periodically
-func (ec *eventConsumer) sessionCleanupRoutine() {
-	ticker := time.NewTicker(ec.sessionInterval)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-ticker.C:
-			ec.cleanupStaleSessions()
-		case <-ec.sessionStopChan:
-			return
-		}
-	}
-}
-
-// Cleanup stale sessions
-func (ec *eventConsumer) cleanupStaleSessions() {
-	now := time.Now()
-	ec.sessionsLock.Lock()
-	defer ec.sessionsLock.Unlock()
-
-	for sessionID, creationTime := range ec.activeSessions {
-		if now.Sub(creationTime) > ec.sessionTimeout {
-			delete(ec.activeSessions, sessionID)
-		}
-	}
-}
-
-// markSessionAsActive marks a session as active with the current timestamp
-func (ec *eventConsumer) addSession(walletID, txID string) {
-	sessionID := fmt.Sprintf("%s-%s", walletID, txID)
-	ec.sessionsLock.Lock()
-	ec.activeSessions[sessionID] = time.Now()
-	ec.sessionsLock.Unlock()
-}
-
-// checkAndTrackSession checks if a session already exists and tracks it if new.
-// Returns true if the session is a duplicate.
-func (ec *eventConsumer) checkDuplicateSession(walletID, txID string) bool {
-	sessionID := fmt.Sprintf("%s-%s", walletID, txID)
-
-	// Check for duplicate
-	ec.sessionsLock.RLock()
-	_, isDuplicate := ec.activeSessions[sessionID]
-	ec.sessionsLock.RUnlock()
-
-	if isDuplicate {
-		logger.Info("Duplicate signing request detected", "walletID", walletID, "txID", txID)
-		return true
-	}
-
-	return false
-}
-
 // Close and clean up
 func (ec *eventConsumer) Close() error {
-	// Signal cleanup routine to stop
-	close(ec.sessionStopChan)
 
 	// Close message buffers to stop workers
 	close(ec.keygenMsgChan)
@@ -864,6 +808,9 @@ func (ec *eventConsumer) Close() error {
 	if err != nil {
 		return err
 	}
+
+	// Stop session cleanup routine
+	ec.sessionMgr.Stop()
 
 	return nil
 }

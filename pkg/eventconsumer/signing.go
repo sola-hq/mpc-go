@@ -143,7 +143,7 @@ func (sc *signingConsumer) Run(ctx context.Context) error {
 func (sc *signingConsumer) handleSigningEvent(msg jetstream.Msg) {
 	// Parse the signing request message to extract transaction details
 	raw := msg.Data()
-	var signingMsg types.SignTxMessage
+	var signingMsg types.SigningMessage
 	sessionID := msg.Headers().Get("SessionID")
 
 	err := json.Unmarshal(raw, &signingMsg)
@@ -218,7 +218,7 @@ func (sc *signingConsumer) handleSigningEvent(msg jetstream.Msg) {
 	}
 }
 
-func (sc *signingConsumer) handleSigningError(signMsg types.SignTxMessage, errorCode event.ErrorCode, err error, sessionID string) {
+func (sc *signingConsumer) handleSigningError(signMsg types.SigningMessage, errorCode event.ErrorCode, err error, sessionID string) {
 	signingResult := event.SigningResultEvent{
 		ResultType:          event.ResultTypeError,
 		ErrorCode:           errorCode,

@@ -69,7 +69,7 @@ func main() {
 	txID := uuid.New().String()
 	dummyTx := []byte("deadbeef") // replace with real transaction bytes
 
-	txMsg := &types.SignTxMessage{
+	txMsg := &types.SigningMessage{
 		KeyType:             types.KeyTypeEd25519,
 		WalletID:            "ad24f678-b04b-4149-bcf6-bf9c90df8e63", // Use the generated wallet ID
 		NetworkInternalCode: "solana-devnet",
