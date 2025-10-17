@@ -39,31 +39,31 @@ type EventConsumer interface {
 }
 
 type eventConsumer struct {
-	node         *mpc.Node
-	pubsub       messaging.PubSub
-	mpcThreshold int
+	node          *mpc.Node
+	pubsub        messaging.PubSub
+	identityStore identity.Store
+	mpcThreshold  int
 
 	keygenResultQueue    messaging.MessageQueue
 	signingResultQueue   messaging.MessageQueue
 	resharingResultQueue messaging.MessageQueue
 
-	keygenSub     messaging.Subscription
-	signingSub    messaging.Subscription
-	resharingSub  messaging.Subscription
-	identityStore identity.Store
+	keygenSub    messaging.Subscription
+	signingSub   messaging.Subscription
+	resharingSub messaging.Subscription
 
-	keygenMsgBuffer      chan *nats.Msg
-	signingMsgBuffer     chan *nats.Msg
+	keygenMsgChan        chan *nats.Msg
+	signingMsgChan       chan *nats.Msg
 	maxConcurrentKeygen  int
 	maxConcurrentSigning int
-	sessionWarmUpDelayMs int
 
-	// Track active sessions with timestamps for cleanup
-	activeSessions  map[string]time.Time // Maps "walletID-txID" to creation time
-	sessionsLock    sync.RWMutex
-	cleanupInterval time.Duration // How often to run cleanup
-	sessionTimeout  time.Duration // How long before a session is considered stale
-	cleanupStopChan chan struct{} // Signal to stop cleanup goroutine
+	// Track active sessions with timestamps for session cleanup routine
+	activeSessions       map[string]time.Time // Maps "walletID-txID" to creation time
+	sessionsLock         sync.RWMutex
+	sessionWarmUpDelayMs int
+	sessionInterval      time.Duration // How often to run session cleanup routine
+	sessionTimeout       time.Duration // How long before a session is considered stale
+	sessionStopChan      chan struct{} // Signal to stop session cleanup routine
 }
 
 func NewEventConsumer(
@@ -106,15 +106,15 @@ func NewEventConsumer(
 		signingResultQueue:   signingResultQueue,
 		resharingResultQueue: resharingResultQueue,
 		activeSessions:       make(map[string]time.Time),
-		cleanupInterval:      5 * time.Minute,  // Run cleanup every 5 minutes
-		sessionTimeout:       30 * time.Minute, // Consider sessions older than 30 minutes stale
-		cleanupStopChan:      make(chan struct{}),
+		sessionInterval:      5 * time.Minute,     // Run cleanup every 5 minutes
+		sessionTimeout:       30 * time.Minute,    // Consider sessions older than 30 minutes stale
+		sessionStopChan:      make(chan struct{}), // Signal to stop session cleanup routine
 		mpcThreshold:         viper.GetInt("mpc_threshold"),
 		maxConcurrentKeygen:  maxConcurrentKeygen,
 		maxConcurrentSigning: maxConcurrentSigning,
 		identityStore:        identityStore,
-		keygenMsgBuffer:      make(chan *nats.Msg, 100),
-		signingMsgBuffer:     make(chan *nats.Msg, 200), // Larger buffer for signing
+		keygenMsgChan:        make(chan *nats.Msg, 100),
+		signingMsgChan:       make(chan *nats.Msg, 200), // Larger buffer for signing
 		sessionWarmUpDelayMs: sessionWarmUpDelayMs,
 	}
 
@@ -305,7 +305,7 @@ func (ec *eventConsumer) startKeyGenEventWorker() {
 	// semaphore to limit concurrency
 	semaphore := make(chan struct{}, ec.maxConcurrentKeygen)
 
-	for natMsg := range ec.keygenMsgBuffer {
+	for natMsg := range ec.keygenMsgChan {
 		semaphore <- struct{}{} // acquire a slot
 		go func(msg *nats.Msg) {
 			defer func() { <-semaphore }() // release the slot when done
@@ -318,7 +318,7 @@ func (ec *eventConsumer) startSigningEventWorker() {
 	// semaphore to limit concurrency
 	semaphore := make(chan struct{}, ec.maxConcurrentSigning)
 
-	for natMsg := range ec.signingMsgBuffer {
+	for natMsg := range ec.signingMsgChan {
 		semaphore <- struct{}{} // acquire a slot
 		go func(msg *nats.Msg) {
 			defer func() { <-semaphore }() // release the slot when done
@@ -329,7 +329,7 @@ func (ec *eventConsumer) startSigningEventWorker() {
 
 func (ec *eventConsumer) consumeKeyGenerationEvent() error {
 	sub, err := ec.pubsub.Subscribe(MPCGenerateEvent, func(natMsg *nats.Msg) {
-		ec.keygenMsgBuffer <- natMsg
+		ec.keygenMsgChan <- natMsg
 	})
 
 	ec.keygenSub = sub
@@ -496,7 +496,7 @@ func (ec *eventConsumer) handleSigningEvent(natMsg *nats.Msg) {
 
 func (ec *eventConsumer) consumeTxSigningEvent() error {
 	sub, err := ec.pubsub.Subscribe(MPCSignEvent, func(natMsg *nats.Msg) {
-		ec.signingMsgBuffer <- natMsg // Send to worker instead of processing directly
+		ec.signingMsgChan <- natMsg // Send to worker instead of processing directly
 	})
 
 	ec.signingSub = sub
@@ -791,14 +791,14 @@ func (ec *eventConsumer) handleResharingSessionError(
 
 // Add a cleanup routine that runs periodically
 func (ec *eventConsumer) sessionCleanupRoutine() {
-	ticker := time.NewTicker(ec.cleanupInterval)
+	ticker := time.NewTicker(ec.sessionInterval)
 	defer ticker.Stop()
 
 	for {
 		select {
 		case <-ticker.C:
 			ec.cleanupStaleSessions()
-		case <-ec.cleanupStopChan:
+		case <-ec.sessionStopChan:
 			return
 		}
 	}
@@ -846,11 +846,11 @@ func (ec *eventConsumer) checkDuplicateSession(walletID, txID string) bool {
 // Close and clean up
 func (ec *eventConsumer) Close() error {
 	// Signal cleanup routine to stop
-	close(ec.cleanupStopChan)
+	close(ec.sessionStopChan)
 
 	// Close message buffers to stop workers
-	close(ec.keygenMsgBuffer)
-	close(ec.signingMsgBuffer)
+	close(ec.keygenMsgChan)
+	close(ec.signingMsgChan)
 
 	err := ec.keygenSub.Unsubscribe()
 	if err != nil {
