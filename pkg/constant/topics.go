@@ -1,7 +1,11 @@
-package event
+package constant
 
 // MPC Topic Constants
+
 const (
+	// MPC stream name
+	MPCStreamName = "mpc"
+
 	// Request topics (with wildcards)
 	KeygenRequestTopic    = "mpc.keygen_request.*"
 	SigningRequestTopic   = "mpc.signing_request.*"

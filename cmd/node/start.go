@@ -9,7 +9,7 @@ import (
 	"syscall"
 
 	"github.com/fystack/mpcium/pkg/config"
-	"github.com/fystack/mpcium/pkg/event"
+	"github.com/fystack/mpcium/pkg/constant"
 	"github.com/fystack/mpcium/pkg/eventconsumer"
 	"github.com/fystack/mpcium/pkg/identity"
 	"github.com/fystack/mpcium/pkg/infra"
@@ -101,31 +101,38 @@ func runNode(cmd *cobra.Command, args []string) error {
 	}
 
 	pubsub := messaging.NewNATSPubSub(natsConn)
-	keygenBroker, err := messaging.NewJetStreamBroker(ctx, natsConn, event.KeygenBrokerStream, []string{
-		event.KeygenRequestTopic,
+	keygenBroker, err := messaging.NewJetStreamBroker(ctx, natsConn, constant.KeygenBrokerStream, []string{
+		constant.KeygenRequestTopic,
 	})
 	if err != nil {
 		logger.Fatal("Failed to create keygen jetstream broker", err)
 	}
-	signingBroker, err := messaging.NewJetStreamBroker(ctx, natsConn, event.SigningBrokerStream, []string{
-		event.SigningRequestTopic,
+
+	signingBroker, err := messaging.NewJetStreamBroker(ctx, natsConn, constant.SigningBrokerStream, []string{
+		constant.SigningRequestTopic,
 	})
 	if err != nil {
 		logger.Fatal("Failed to create signing jetstream broker", err)
 	}
 
-	directMessaging := messaging.NewNatsDirectMessaging(natsConn)
-	mqManager := messaging.NewNATsMessageQueueManager("mpc", []string{
-		event.KeygenResultTopic,
-		event.SigningResultTopic,
-		event.ResharingResultTopic,
-	}, natsConn)
+	subjects := []string{
+		constant.KeygenResultTopic,
+		constant.SigningResultTopic,
+		constant.ResharingResultTopic,
+	}
 
-	genKeyResultQueue := mqManager.NewMessageQueue(event.KeygenResultQueueName)
+	directMessaging := messaging.NewNatsDirectMessaging(natsConn)
+	messageQueueMgr := messaging.NewNATsMessageQueueManager(
+		constant.MPCStreamName,
+		subjects,
+		natsConn,
+	)
+
+	genKeyResultQueue := messageQueueMgr.NewMessageQueue(constant.KeygenResultQueueName)
 	defer genKeyResultQueue.Close()
-	singingResultQueue := mqManager.NewMessageQueue(event.SigningResultQueueName)
-	defer singingResultQueue.Close()
-	resharingResultQueue := mqManager.NewMessageQueue(event.ResharingResultQueueName)
+	signingResultQueue := messageQueueMgr.NewMessageQueue(constant.SigningResultQueueName)
+	defer signingResultQueue.Close()
+	resharingResultQueue := messageQueueMgr.NewMessageQueue(constant.ResharingResultQueueName)
 	defer resharingResultQueue.Close()
 
 	logger.Info("Node is running", "ID", nodeID, "name", nodeName)
@@ -149,7 +156,7 @@ func runNode(cmd *cobra.Command, args []string) error {
 		mpcNode,
 		pubsub,
 		genKeyResultQueue,
-		singingResultQueue,
+		signingResultQueue,
 		resharingResultQueue,
 		identityStore,
 	)
@@ -158,13 +165,14 @@ func runNode(cmd *cobra.Command, args []string) error {
 
 	timeoutConsumer := eventconsumer.NewTimeOutConsumer(
 		natsConn,
-		singingResultQueue,
+		signingResultQueue,
 	)
 
 	timeoutConsumer.Run()
 	defer timeoutConsumer.Close()
+
 	keygenConsumer := eventconsumer.NewKeygenConsumer(natsConn, keygenBroker, pubsub, peerRegistry, genKeyResultQueue)
-	signingConsumer := eventconsumer.NewSigningConsumer(natsConn, signingBroker, pubsub, peerRegistry, singingResultQueue)
+	signingConsumer := eventconsumer.NewSigningConsumer(natsConn, signingBroker, pubsub, peerRegistry, signingResultQueue)
 
 	// Make the node ready before starting the signing consumer
 	if err := peerRegistry.Ready(); err != nil {

@@ -585,7 +585,7 @@ verify_deployment() {
     done
     
     # Check binaries
-    local required_binaries=("mpc" "mpc-cli")
+    local required_binaries=("mpc-node" "mpc-cli")
     for binary in "${required_binaries[@]}"; do
         if [[ ! -f "/usr/local/bin/$binary" ]] || [[ ! -x "/usr/local/bin/$binary" ]]; then
             log_error "Missing or non-executable binary: /usr/local/bin/$binary"

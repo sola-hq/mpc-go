@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/fystack/mpcium/pkg/constant"
 	"github.com/fystack/mpcium/pkg/event"
 	"github.com/fystack/mpcium/pkg/logger"
 	"github.com/fystack/mpcium/pkg/messaging"
@@ -103,8 +104,8 @@ func (sc *keygenConsumer) Run(ctx context.Context) error {
 
 	sub, err := sc.jsBroker.CreateSubscription(
 		ctx,
-		event.KeygenConsumerStream,
-		event.KeygenRequestTopic,
+		constant.KeygenConsumerStream,
+		constant.KeygenRequestTopic,
 		sc.handleKeygenEvent,
 	)
 	if err != nil {

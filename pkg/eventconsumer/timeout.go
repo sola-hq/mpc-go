@@ -3,6 +3,7 @@ package eventconsumer
 import (
 	"encoding/json"
 
+	"github.com/fystack/mpcium/pkg/constant"
 	"github.com/fystack/mpcium/pkg/event"
 	"github.com/fystack/mpcium/pkg/logger"
 	"github.com/fystack/mpcium/pkg/messaging"
@@ -42,7 +43,7 @@ func (tc *timeOutConsumer) Run() {
 		}
 		logger.Info("Received advisory message", "stream", advisory.Stream, "stream_seq", advisory.StreamSeq)
 
-		if advisory.Stream == event.SigningBrokerStream {
+		if advisory.Stream == constant.SigningBrokerStream {
 			logger.Info("Received max deliveries exceeded advisory", "stream", advisory.Stream, "stream_seq", advisory.StreamSeq)
 			js, _ := tc.natsConn.JetStream()
 			failedMsg, err := js.GetMsg(advisory.Stream, advisory.StreamSeq)
@@ -65,13 +66,13 @@ func (tc *timeOutConsumer) Run() {
 			signResponse.IsTimeout = true
 			signResponse.ErrorReason = "Signing failed: maximum delivery attempts exceeded"
 
-			signErrorResultBytes, err := json.Marshal(signResponse)
+			signResponseBytes, err := json.Marshal(signResponse)
 			if err != nil {
 				logger.Error("Failed to marshal signing result event", err)
 				return
 			}
 
-			err = tc.resultQueue.Enqueue(event.SigningResultTopic, signErrorResultBytes, &messaging.EnqueueOptions{
+			err = tc.resultQueue.Enqueue(constant.SigningResultTopic, signResponseBytes, &messaging.EnqueueOptions{
 				IdempotentKey: signResponse.TxID,
 			})
 			if err != nil {

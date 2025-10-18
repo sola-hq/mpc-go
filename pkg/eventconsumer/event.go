@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/fystack/mpcium/pkg/constant"
 	"github.com/fystack/mpcium/pkg/event"
 	"github.com/fystack/mpcium/pkg/identity"
 	"github.com/fystack/mpcium/pkg/logger"
@@ -530,7 +531,7 @@ func (ec *eventConsumer) handleSigningSessionError(walletID, txID string, err er
 		)
 		return
 	}
-	err = ec.signingResultQueue.Enqueue(event.SigningResultCompleteTopic, signingResultBytes, &messaging.EnqueueOptions{
+	err = ec.signingResultQueue.Enqueue(constant.SigningResultCompleteTopic, signingResultBytes, &messaging.EnqueueOptions{
 		IdempotentKey: composeSigningResultIdempotentKey(txID, natMsg),
 	})
 	if err != nil {

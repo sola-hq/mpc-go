@@ -37,7 +37,7 @@ type NATsMessageQueueManager struct {
 	js        jetstream.JetStream
 }
 
-func NewNATsMessageQueueManager(queueName string, subjectWildCards []string, nc *nats.Conn) *NATsMessageQueueManager {
+func NewNATsMessageQueueManager(queueName string, subjects []string, nc *nats.Conn) *NATsMessageQueueManager {
 	js, err := jetstream.New(nc)
 	if err != nil {
 		logger.Fatal("Error creating JetStream context: ", err)
@@ -57,7 +57,7 @@ func NewNATsMessageQueueManager(queueName string, subjectWildCards []string, nc 
 	_, err = js.CreateOrUpdateStream(context.Background(), jetstream.StreamConfig{
 		Name:        queueName,
 		Description: "Stream for " + queueName,
-		Subjects:    subjectWildCards,
+		Subjects:    subjects,
 		MaxBytes:    10_485_760, // Light Production (Low Traffic) (10 MB)
 		Storage:     jetstream.FileStorage,
 		Retention:   jetstream.WorkQueuePolicy,
@@ -65,7 +65,7 @@ func NewNATsMessageQueueManager(queueName string, subjectWildCards []string, nc 
 	if err != nil {
 		logger.Fatal("Error creating JetStream stream: ", err)
 	}
-	logger.Info("Creating apex NATs Jetstream context successfully!", "streamName", queueName, "subjects", subjectWildCards)
+	logger.Info("Creating apex NATs Jetstream context successfully!", "streamName", queueName, "subjects", subjects)
 
 	return &NATsMessageQueueManager{
 		queueName: queueName,

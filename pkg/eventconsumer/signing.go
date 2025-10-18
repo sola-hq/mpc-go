@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/fystack/mpcium/pkg/constant"
 	"github.com/fystack/mpcium/pkg/event"
 	"github.com/fystack/mpcium/pkg/logger"
 	"github.com/fystack/mpcium/pkg/messaging"
@@ -106,8 +107,8 @@ func (sc *signingConsumer) Run(ctx context.Context) error {
 
 	sub, err := sc.jsBroker.CreateSubscription(
 		ctx,
-		event.SigningConsumerStream,
-		event.SigningRequestTopic,
+		constant.SigningConsumerStream,
+		constant.SigningRequestTopic,
 		sc.handleSigningEvent,
 	)
 	if err != nil {
@@ -235,7 +236,7 @@ func (sc *signingConsumer) handleSigningError(msg types.SigningMessage, errorCod
 		return
 	}
 
-	err = sc.signingResultQueue.Enqueue(event.SigningResultCompleteTopic, signingResultBytes, &messaging.EnqueueOptions{
+	err = sc.signingResultQueue.Enqueue(constant.SigningResultCompleteTopic, signingResultBytes, &messaging.EnqueueOptions{
 		IdempotentKey: buildIdempotentKey(msg.TxID, sessionID, core.TypeSigningResultFmt),
 	})
 	if err != nil {
