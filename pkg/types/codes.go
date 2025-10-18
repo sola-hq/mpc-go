@@ -1,12 +1,8 @@
-package event
+package types
 
 import (
 	"strings"
-
-	"github.com/fystack/mpcium/pkg/types"
 )
-
-type ErrorCode = types.ErrorCode
 
 const (
 	// Generic/Unknown errors

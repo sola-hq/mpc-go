@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/fystack/mpcium/pkg/constant"
-	"github.com/fystack/mpcium/pkg/event"
 	"github.com/fystack/mpcium/pkg/logger"
 	"github.com/fystack/mpcium/pkg/messaging"
 	"github.com/fystack/mpcium/pkg/mpc"
@@ -150,7 +149,7 @@ func (sc *signingConsumer) handleSigningEvent(msg jetstream.Msg) {
 	err := json.Unmarshal(raw, &signingMsg)
 	if err != nil {
 		logger.Error("SigningConsumer: Failed to unmarshal signing message", err)
-		sc.handleSigningError(signingMsg, event.ErrorCodeUnmarshalFailure, err, sessionID)
+		sc.handleSigningError(signingMsg, types.ErrorCodeUnmarshalFailure, err, sessionID)
 		_ = msg.Ack()
 		return
 	}
@@ -158,7 +157,7 @@ func (sc *signingConsumer) handleSigningEvent(msg jetstream.Msg) {
 	if !sc.peerRegistry.AreMajorityReady() {
 		requiredPeers := int64(sc.mpcThreshold + 1)
 		err := fmt.Errorf("not enough peers to process signing request: ready=%d, required=%d", sc.peerRegistry.GetReadyPeersCount(), requiredPeers)
-		sc.handleSigningError(signingMsg, event.ErrorCodeNotMajority, err, sessionID)
+		sc.handleSigningError(signingMsg, types.ErrorCodeNotMajority, err, sessionID)
 		_ = msg.Ack()
 		return
 	}

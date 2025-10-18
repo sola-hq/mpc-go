@@ -457,7 +457,6 @@ func (b *badgerBackupExecutor) parseBackupMetadata(path string) (BadgerBackupMet
 	if err != nil {
 		return meta, err
 	}
-	defer f.Close()
 
 	// Skip magic
 	magicBuf := make([]byte, len(magic))
