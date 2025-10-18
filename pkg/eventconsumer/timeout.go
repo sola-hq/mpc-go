@@ -23,9 +23,7 @@ const (
 
 // StreamHandler defines the interface for handling different stream types
 type StreamHandler interface {
-	HandleTimeout(stream string, streamSeq uint64, data []byte) error
-	GetResultTopic() string
-	GetIdempotentKey(data []byte) (string, error)
+	HandleTimeout(stream string, streamSeq uint64, data []byte) (idempotentKey string, err error)
 }
 
 // SigningStreamHandler handles signing stream timeouts
@@ -33,10 +31,10 @@ type SigningStreamHandler struct {
 	messageQueue messaging.MessageQueue
 }
 
-func (h *SigningStreamHandler) HandleTimeout(stream string, streamSeq uint64, data []byte) error {
+func (h *SigningStreamHandler) HandleTimeout(stream string, streamSeq uint64, data []byte) (idempotentKey string, err error) {
 	var signResponse types.SigningResponse
 	if err := json.Unmarshal(data, &signResponse); err != nil {
-		return fmt.Errorf("failed to unmarshal signing response: %w", err)
+		return "", fmt.Errorf("failed to unmarshal signing response: %w", err)
 	}
 
 	signResponse.ErrorCode = types.ErrorCodeMaxDeliveryAttempts
@@ -45,26 +43,20 @@ func (h *SigningStreamHandler) HandleTimeout(stream string, streamSeq uint64, da
 
 	signResponseBytes, err := json.Marshal(signResponse)
 	if err != nil {
-		return fmt.Errorf("failed to marshal signing response: %w", err)
+		err = fmt.Errorf("failed to marshal signing response: %w", err)
+		return
 	}
 
-	return h.messageQueue.Enqueue(
+	err = h.messageQueue.Enqueue(
 		constant.SigningResultTopic,
 		signResponseBytes,
 		&messaging.EnqueueOptions{
 			IdempotentKey: signResponse.TxID,
 		},
 	)
-}
-
-func (h *SigningStreamHandler) GetResultTopic() string {
-	return constant.SigningResultTopic
-}
-
-func (h *SigningStreamHandler) GetIdempotentKey(data []byte) (string, error) {
-	var signResponse types.SigningResponse
-	if err := json.Unmarshal(data, &signResponse); err != nil {
-		return "", fmt.Errorf("failed to unmarshal signing response: %w", err)
+	if err != nil {
+		err = fmt.Errorf("failed to enqueue signing response: %w", err)
+		return
 	}
 	return signResponse.TxID, nil
 }
@@ -74,10 +66,10 @@ type ResharingStreamHandler struct {
 	messageQueue messaging.MessageQueue
 }
 
-func (h *ResharingStreamHandler) HandleTimeout(stream string, streamSeq uint64, data []byte) error {
+func (h *ResharingStreamHandler) HandleTimeout(stream string, streamSeq uint64, data []byte) (idempotentKey string, err error) {
 	var resharingResponse types.ResharingResponse
 	if err := json.Unmarshal(data, &resharingResponse); err != nil {
-		return fmt.Errorf("failed to unmarshal resharing response: %w", err)
+		return "", fmt.Errorf("failed to unmarshal resharing response: %w", err)
 	}
 
 	resharingResponse.ErrorCode = types.ErrorCodeMaxDeliveryAttempts
@@ -85,23 +77,16 @@ func (h *ResharingStreamHandler) HandleTimeout(stream string, streamSeq uint64, 
 
 	resharingResponseBytes, err := json.Marshal(resharingResponse)
 	if err != nil {
-		return fmt.Errorf("failed to marshal resharing response: %w", err)
+		err = fmt.Errorf("failed to marshal resharing response: %w", err)
+		return
 	}
 
-	return h.messageQueue.Enqueue(constant.ResharingResultTopic, resharingResponseBytes, &messaging.EnqueueOptions{
+	err = h.messageQueue.Enqueue(constant.ResharingResultTopic, resharingResponseBytes, &messaging.EnqueueOptions{
 		IdempotentKey: resharingResponse.WalletID,
-	},
-	)
-}
-
-func (h *ResharingStreamHandler) GetResultTopic() string {
-	return constant.ResharingResultTopic
-}
-
-func (h *ResharingStreamHandler) GetIdempotentKey(data []byte) (string, error) {
-	var resharingResponse types.ResharingResponse
-	if err := json.Unmarshal(data, &resharingResponse); err != nil {
-		return "", fmt.Errorf("failed to unmarshal resharing response: %w", err)
+	})
+	if err != nil {
+		err = fmt.Errorf("failed to enqueue resharing response: %w", err)
+		return
 	}
 	return resharingResponse.WalletID, nil
 }
@@ -111,10 +96,10 @@ type KeygenStreamHandler struct {
 	messageQueue messaging.MessageQueue
 }
 
-func (h *KeygenStreamHandler) HandleTimeout(stream string, streamSeq uint64, data []byte) error {
+func (h *KeygenStreamHandler) HandleTimeout(stream string, streamSeq uint64, data []byte) (idempotentKey string, err error) {
 	var keygenResponse types.KeygenResponse
 	if err := json.Unmarshal(data, &keygenResponse); err != nil {
-		return fmt.Errorf("failed to unmarshal keygen response: %w", err)
+		return "", fmt.Errorf("failed to unmarshal keygen response: %w", err)
 	}
 
 	keygenResponse.ErrorCode = types.ErrorCodeMaxDeliveryAttempts
@@ -122,26 +107,19 @@ func (h *KeygenStreamHandler) HandleTimeout(stream string, streamSeq uint64, dat
 
 	keygenResponseBytes, err := json.Marshal(keygenResponse)
 	if err != nil {
-		return fmt.Errorf("failed to marshal keygen response: %w", err)
+		return "", fmt.Errorf("failed to marshal keygen response: %w", err)
 	}
 
-	return h.messageQueue.Enqueue(
+	err = h.messageQueue.Enqueue(
 		constant.KeygenResultTopic,
 		keygenResponseBytes,
 		&messaging.EnqueueOptions{
 			IdempotentKey: keygenResponse.WalletID,
 		},
 	)
-}
-
-func (h *KeygenStreamHandler) GetResultTopic() string {
-	return constant.KeygenResultTopic
-}
-
-func (h *KeygenStreamHandler) GetIdempotentKey(data []byte) (string, error) {
-	var keygenResponse types.KeygenResponse
-	if err := json.Unmarshal(data, &keygenResponse); err != nil {
-		return "", fmt.Errorf("failed to unmarshal keygen response: %w", err)
+	if err != nil {
+		err = fmt.Errorf("failed to enqueue keygen response: %w", err)
+		return
 	}
 	return keygenResponse.WalletID, nil
 }
@@ -179,7 +157,7 @@ func NewTimeOutConsumer(natsConn *nats.Conn, messageQueue messaging.MessageQueue
 func (tc *timeOutConsumer) Run() {
 	logger.Info("Starting advisory consumer for max deliveries exceeded")
 
-	sub, err := tc.natsConn.Subscribe(maxDeliveriesExceededSubject, tc.handleAdvisoryMessage)
+	sub, err := tc.natsConn.Subscribe(maxDeliveriesExceededSubject, tc.handleDeadlineExceeded)
 	if err != nil {
 		logger.Error("Failed to subscribe to max deliveries exceeded subject", err)
 		return
@@ -188,8 +166,8 @@ func (tc *timeOutConsumer) Run() {
 	tc.subscription = sub
 }
 
-// handleAdvisoryMessage processes advisory messages for max deliveries exceeded
-func (tc *timeOutConsumer) handleAdvisoryMessage(msg *nats.Msg) {
+// handleDeadlineExceeded processes deadline exceeded messages
+func (tc *timeOutConsumer) handleDeadlineExceeded(msg *nats.Msg) {
 	var advisory struct {
 		Stream    string `json:"stream"`
 		StreamSeq uint64 `json:"stream_seq"`
@@ -222,34 +200,38 @@ func (tc *timeOutConsumer) handleAdvisoryMessage(msg *nats.Msg) {
 	if err != nil {
 		logger.Error("Failed to retrieve failed message", err,
 			"stream", advisory.Stream,
-			"stream_seq", advisory.StreamSeq)
+			"stream_seq", advisory.StreamSeq,
+		)
 		return
 	}
 
 	// Handle the timeout using the appropriate handler
-	if err := handler.HandleTimeout(advisory.Stream, advisory.StreamSeq, failedMsg.Data); err != nil {
-		logger.Error("Failed to handle timeout", err,
+	idempotentKey, err := handler.HandleTimeout(advisory.Stream, advisory.StreamSeq, failedMsg.Data)
+	if err != nil {
+		logger.Error(
+			"Failed to handle timeout", err,
 			"stream", advisory.Stream,
-			"stream_seq", advisory.StreamSeq)
+			"stream_seq", advisory.StreamSeq,
+		)
 		return
 	}
 
-	// Get idempotent key for logging
-	idempotentKey, err := handler.GetIdempotentKey(failedMsg.Data)
-	if err != nil {
-		logger.Warn("Failed to get idempotent key for logging", "error", err)
-		idempotentKey = "unknown"
-	}
-
-	logger.Info("Successfully handled timeout",
+	logger.Info(
+		"Successfully handled timeout",
 		"stream", advisory.Stream,
-		"idempotent_key", idempotentKey)
+		"stream_seq", advisory.StreamSeq,
+		"idempotent_key", idempotentKey,
+	)
 }
 
 // Close stops the timeout consumer
 func (tc *timeOutConsumer) Close() error {
-	if tc.subscription == nil {
-		return nil
+	if tc.subscription != nil {
+		if err := tc.subscription.Unsubscribe(); err != nil {
+			logger.Error("Failed to unsubscribe from max deliveries exceeded subject", err)
+			return err
+		}
 	}
-	return tc.subscription.Unsubscribe()
+	logger.Info("Unsubscribed from max deliveries exceeded subject")
+	return nil
 }
