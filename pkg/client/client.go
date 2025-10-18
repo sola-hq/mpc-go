@@ -7,7 +7,6 @@ import (
 
 	"github.com/fystack/mpcium/pkg/client/signer"
 	"github.com/fystack/mpcium/pkg/constant"
-	"github.com/fystack/mpcium/pkg/eventconsumer"
 	"github.com/fystack/mpcium/pkg/logger"
 	"github.com/fystack/mpcium/pkg/messaging"
 	"github.com/fystack/mpcium/pkg/types"
@@ -17,6 +16,7 @@ import (
 type initiator struct {
 	signingBroker        messaging.MessageBroker
 	keygenBroker         messaging.MessageBroker
+	resharingBroker      messaging.MessageBroker
 	pubsub               messaging.PubSub
 	keygenResultQueue    messaging.MessageQueue
 	signingResultQueue   messaging.MessageQueue
@@ -62,6 +62,16 @@ func NewMPCClient(opts Options) types.Initiator {
 		logger.Fatal("Failed to create keygen jetstream broker", err)
 	}
 
+	resharingBroker, err := messaging.NewJetStreamBroker(
+		context.Background(),
+		opts.NatsConn,
+		constant.ResharingBrokerStream,
+		[]string{constant.ResharingRequestTopic},
+	)
+	if err != nil {
+		logger.Fatal("Failed to create resharing jetstream broker", err)
+	}
+
 	pubsub := messaging.NewNATSPubSub(opts.NatsConn)
 
 	subjects := []string{
@@ -79,6 +89,7 @@ func NewMPCClient(opts Options) types.Initiator {
 	return &initiator{
 		signingBroker:        signingBroker,
 		keygenBroker:         keygenBroker,
+		resharingBroker:      resharingBroker,
 		pubsub:               pubsub,
 		keygenResultQueue:    keygenResultQueue,
 		signingResultQueue:   signingResultQueue,
@@ -109,7 +120,8 @@ func (c *initiator) CreateWallet(walletID string) error {
 		return fmt.Errorf("CreateWallet: marshal error: %w", err)
 	}
 
-	if err := c.keygenBroker.PublishMessage(context.Background(), constant.KeygenRequestTopic, bytes); err != nil {
+	topic := constant.FormatKeygenRequestTopic(walletID)
+	if err := c.keygenBroker.PublishMessage(context.Background(), topic, bytes); err != nil {
 		return fmt.Errorf("CreateWallet: publish error: %w", err)
 	}
 	return nil
@@ -152,7 +164,8 @@ func (c *initiator) SignTransaction(msg *types.SigningMessage) error {
 		return fmt.Errorf("SignTransaction: marshal error: %w", err)
 	}
 
-	if err := c.signingBroker.PublishMessage(context.Background(), constant.SigningRequestTopic, bytes); err != nil {
+	topic := constant.FormatSigningRequestTopic(msg.TxID)
+	if err := c.signingBroker.PublishMessage(context.Background(), topic, bytes); err != nil {
 		return fmt.Errorf("SignTransaction: publish error: %w", err)
 	}
 	return nil
@@ -193,7 +206,8 @@ func (c *initiator) Resharing(msg *types.ResharingMessage) error {
 		return fmt.Errorf("Resharing: marshal error: %w", err)
 	}
 
-	if err := c.pubsub.Publish(eventconsumer.MPCResharingEvent, bytes); err != nil {
+	topic := constant.FormatResharingRequestTopic(msg.WalletID)
+	if err := c.resharingBroker.PublishMessage(context.Background(), topic, bytes); err != nil {
 		return fmt.Errorf("Resharing: publish error: %w", err)
 	}
 	return nil

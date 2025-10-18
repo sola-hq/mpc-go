@@ -192,8 +192,8 @@ func main() {
     })
 
     // Handle wallet creation results
-    err = mpcClient.OnWalletCreationResult(func(event event.KeygenResultEvent) {
-        logger.Info("Received wallet creation result", "event", event)
+    err = mpcClient.OnWalletCreationResult(func(response types.KeygenResponse) {
+        logger.Info("Received wallet creation result", "response", response)
     })
     if err != nil {
         logger.Fatal("Failed to subscribe to wallet-creation results", err)

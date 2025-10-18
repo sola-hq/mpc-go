@@ -115,6 +115,13 @@ func runNode(cmd *cobra.Command, args []string) error {
 		logger.Fatal("Failed to create signing jetstream broker", err)
 	}
 
+	resharingBroker, err := messaging.NewJetStreamBroker(ctx, natsConn, constant.ResharingBrokerStream, []string{
+		constant.ResharingRequestTopic,
+	})
+	if err != nil {
+		logger.Fatal("Failed to create resharing jetstream broker", err)
+	}
+
 	subjects := []string{
 		constant.KeygenResultTopic,
 		constant.SigningResultTopic,
@@ -173,6 +180,7 @@ func runNode(cmd *cobra.Command, args []string) error {
 
 	keygenConsumer := eventconsumer.NewKeygenConsumer(natsConn, keygenBroker, pubsub, peerRegistry, genKeyResultQueue)
 	signingConsumer := eventconsumer.NewSigningConsumer(natsConn, signingBroker, pubsub, peerRegistry, signingResultQueue)
+	resharingConsumer := eventconsumer.NewResharingConsumer(natsConn, resharingBroker, pubsub, peerRegistry, resharingResultQueue)
 
 	// Make the node ready before starting the signing consumer
 	if err := peerRegistry.Ready(); err != nil {
@@ -201,6 +209,9 @@ func runNode(cmd *cobra.Command, args []string) error {
 		}
 		if err := signingConsumer.Close(); err != nil {
 			logger.Error("Failed to close signing consumer", err)
+		}
+		if err := resharingConsumer.Close(); err != nil {
+			logger.Error("Failed to close resharing consumer", err)
 		}
 
 		err := natsConn.Drain()
@@ -232,6 +243,17 @@ func runNode(cmd *cobra.Command, args []string) error {
 			return
 		}
 		logger.Info("Signing consumer finished successfully")
+	}()
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		if err := resharingConsumer.Run(appContext); err != nil {
+			logger.Error("error running resharing consumer", err)
+			errChan <- fmt.Errorf("resharing consumer error: %w", err)
+			return
+		}
+		logger.Info("Resharing consumer finished successfully")
 	}()
 
 	go func() {

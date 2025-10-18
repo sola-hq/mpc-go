@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/fystack/mpcium/pkg/constant"
-	"github.com/fystack/mpcium/pkg/event"
 	"github.com/fystack/mpcium/pkg/logger"
 	"github.com/fystack/mpcium/pkg/messaging"
 	"github.com/fystack/mpcium/pkg/mpc"
@@ -130,14 +129,14 @@ func (sc *keygenConsumer) handleKeygenEvent(msg jetstream.Msg) {
 	err := json.Unmarshal(raw, &keygenMsg)
 	if err != nil {
 		logger.Error("SigningConsumer: Failed to unmarshal keygen message", err)
-		sc.handleKeygenError(keygenMsg, event.ErrorCodeUnmarshalFailure, err, sessionID)
+		sc.handleKeygenError(keygenMsg, types.ErrorCodeUnmarshalFailure, err, sessionID)
 		_ = msg.Ack()
 		return
 	}
 
 	if !sc.peerRegistry.ArePeersReady() {
 		logger.Warn("KeygenConsumer: Not all peers are ready to gen key, skipping message processing")
-		sc.handleKeygenError(keygenMsg, event.ErrorCodeClusterNotReady, errors.New("not all peers are ready"), sessionID)
+		sc.handleKeygenError(keygenMsg, types.ErrorCodeClusterNotReady, errors.New("not all peers are ready"), sessionID)
 		_ = msg.Ack()
 		return
 	}
@@ -193,7 +192,7 @@ func (sc *keygenConsumer) handleKeygenEvent(msg jetstream.Msg) {
 	_ = msg.Nak()
 }
 
-func (sc *keygenConsumer) handleKeygenError(keygenMsg types.KeygenMessage, errorCode event.ErrorCode, err error, sessionID string) {
+func (sc *keygenConsumer) handleKeygenError(keygenMsg types.KeygenMessage, errorCode types.ErrorCode, err error, sessionID string) {
 	keygenResult := types.KeygenResponse{
 		ErrorCode:   errorCode,
 		WalletID:    keygenMsg.WalletID,
