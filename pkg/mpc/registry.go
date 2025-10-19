@@ -51,7 +51,7 @@ type registry struct {
 	pubSub        messaging.PubSub
 	identityStore identity.Store
 	ecdhSession   ECDHSession
-	mpcThreshold  int
+	threshold     int
 
 	onPeerConnected    func(peerID string)
 	onPeerDisconnected func(peerID string)
@@ -67,9 +67,9 @@ func NewRegistry(
 	identityStore identity.Store,
 ) *registry {
 	ecdhSession := NewECDHSession(nodeID, peerNodeIDs, pubSub, identityStore)
-	mpcThreshold := viper.GetInt("mpc_threshold")
-	if mpcThreshold < 1 {
-		logger.Fatal("mpc_threshold must be greater than 0", nil)
+	threshold := viper.GetInt("threshold")
+	if threshold < 1 {
+		logger.Fatal("threshold must be greater than 0", nil)
 	}
 
 	reg := &registry{
@@ -82,7 +82,7 @@ func NewRegistry(
 		pubSub:        pubSub,
 		identityStore: identityStore,
 		ecdhSession:   ecdhSession,
-		mpcThreshold:  mpcThreshold,
+		threshold:     threshold,
 	}
 
 	go reg.consumeECDHErrors()
@@ -298,11 +298,11 @@ func (r *registry) ArePeersReady() bool {
 
 // AreMajorityReady checks if a majority of peers are ready.
 // Returns true only if:
-//  1. The number of ready peers (including self) is greater than mpcThreshold+1
+//  1. The number of ready peers (including self) is greater than threshold+1
 //  2. Symmetric keys are fully established among all ready peers (excluding self).
 func (r *registry) AreMajorityReady() bool {
 	readyCount := r.GetReadyPeersCount()
-	return int(readyCount) >= r.mpcThreshold+1 && r.isECDHReady()
+	return int(readyCount) >= r.threshold+1 && r.isECDHReady()
 }
 
 func (r *registry) GetTotalPeersCount() int64 {

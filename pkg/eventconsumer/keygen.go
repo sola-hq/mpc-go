@@ -62,7 +62,7 @@ func NewKeygenConsumer(
 	}
 }
 
-func (sc *keygenConsumer) waitForAllPeersReadyToGenKey(ctx context.Context) error {
+func (kc *keygenConsumer) waitForSufficientPeers(ctx context.Context) error {
 
 	logger.Info("KeygenConsumer: Waiting for all peers to be ready before consuming messages")
 
@@ -77,66 +77,66 @@ func (sc *keygenConsumer) waitForAllPeersReadyToGenKey(ctx context.Context) erro
 			}
 			return ctx.Err()
 		case <-ticker.C:
-			allPeersReady := sc.peerRegistry.ArePeersReady()
+			allPeersReady := kc.peerRegistry.ArePeersReady()
 
 			if allPeersReady {
 				logger.Info("KeygenConsumer: All peers are ready, proceeding to consume messages")
 				return nil
 			} else {
 				logger.Info("KeygenConsumer: Waiting for all peers to be ready",
-					"readyPeers", sc.peerRegistry.GetReadyPeersCount(),
-					"totalPeers", sc.peerRegistry.GetTotalPeersCount())
+					"readyPeers", kc.peerRegistry.GetReadyPeersCount(),
+					"totalPeers", kc.peerRegistry.GetTotalPeersCount())
 			}
 		}
 	}
 }
 
 // Run subscribes to signing events and processes them until the context is canceled.
-func (sc *keygenConsumer) Run(ctx context.Context) error {
+func (kc *keygenConsumer) Run(ctx context.Context) error {
 	// Wait for sufficient peers before starting to consume messages
-	if err := sc.waitForAllPeersReadyToGenKey(ctx); err != nil {
+	if err := kc.waitForSufficientPeers(ctx); err != nil {
 		if err == context.Canceled {
 			return nil
 		}
 		return fmt.Errorf("failed to wait for sufficient peers: %w", err)
 	}
 
-	sub, err := sc.jsBroker.CreateSubscription(
+	sub, err := kc.jsBroker.CreateSubscription(
 		ctx,
 		constant.KeygenConsumerStream,
 		constant.KeygenRequestTopic,
-		sc.handleKeygenEvent,
+		kc.handleKeygenEvent,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to subscribe to keygen events: %w", err)
 	}
-	sc.jsSub = sub
-	logger.Info("SigningConsumer: Subscribed to keygen events")
+	kc.jsSub = sub
+	logger.Info("KeygenConsumer: Subscribed to keygen events")
 
 	// Block until context cancellation.
 	<-ctx.Done()
 	logger.Info("KeygenConsumer: Context cancelled, shutting down")
 
 	// When context is canceled, close subscription.
-	return sc.Close()
+	return kc.Close()
 }
 
-func (sc *keygenConsumer) handleKeygenEvent(msg jetstream.Msg) {
+func (kc *keygenConsumer) handleKeygenEvent(msg jetstream.Msg) {
 	raw := msg.Data()
 	var keygenMsg types.KeygenMessage
 	sessionID := msg.Headers().Get("SessionID")
 
 	err := json.Unmarshal(raw, &keygenMsg)
 	if err != nil {
-		logger.Error("SigningConsumer: Failed to unmarshal keygen message", err)
-		sc.handleKeygenError(keygenMsg, types.ErrorCodeUnmarshalFailure, err, sessionID)
+		logger.Error("KeygenConsumer: Failed to unmarshal keygen message", err)
+		kc.handleKeygenError(keygenMsg, types.ErrorCodeUnmarshalFailure, err, sessionID)
 		_ = msg.Ack()
 		return
 	}
 
-	if !sc.peerRegistry.ArePeersReady() {
+	if !kc.peerRegistry.ArePeersReady() {
 		logger.Warn("KeygenConsumer: Not all peers are ready to gen key, skipping message processing")
-		sc.handleKeygenError(keygenMsg, types.ErrorCodeClusterNotReady, errors.New("not all peers are ready"), sessionID)
+		kc.handleKeygenError(keygenMsg, types.ErrorCodeClusterNotReady, errors.New("not all peers are ready"), sessionID)
 		_ = msg.Ack()
 		return
 	}
@@ -145,7 +145,7 @@ func (sc *keygenConsumer) handleKeygenEvent(msg jetstream.Msg) {
 	replyInbox := nats.NewInbox()
 
 	// Use a synchronous subscription for the reply inbox.
-	replySub, err := sc.natsConn.SubscribeSync(replyInbox)
+	replySub, err := kc.natsConn.SubscribeSync(replyInbox)
 	if err != nil {
 		logger.Error("KeygenConsumer: Failed to subscribe to reply inbox", err)
 		_ = msg.Nak()
@@ -161,7 +161,7 @@ func (sc *keygenConsumer) handleKeygenEvent(msg jetstream.Msg) {
 	headers := map[string]string{
 		"SessionID": uuid.New().String(),
 	}
-	if err := sc.pubsub.PublishWithReply(MPCGenerateEvent, replyInbox, msg.Data(), headers); err != nil {
+	if err := kc.pubsub.PublishWithReply(MPCGenerateEvent, replyInbox, msg.Data(), headers); err != nil {
 		logger.Error("KeygenConsumer: Failed to publish signing event with reply", err)
 		_ = msg.Nak()
 		return
@@ -192,7 +192,7 @@ func (sc *keygenConsumer) handleKeygenEvent(msg jetstream.Msg) {
 	_ = msg.Nak()
 }
 
-func (sc *keygenConsumer) handleKeygenError(keygenMsg types.KeygenMessage, errorCode types.ErrorCode, err error, sessionID string) {
+func (kc *keygenConsumer) handleKeygenError(keygenMsg types.KeygenMessage, errorCode types.ErrorCode, err error, sessionID string) {
 	keygenResult := types.KeygenResponse{
 		ErrorCode:   errorCode,
 		WalletID:    keygenMsg.WalletID,
@@ -208,7 +208,7 @@ func (sc *keygenConsumer) handleKeygenError(keygenMsg types.KeygenMessage, error
 	}
 
 	topic := fmt.Sprintf(core.TypeGenerateWalletResultFmt, keygenResult.WalletID)
-	err = sc.keygenResultQueue.Enqueue(topic, keygenResultBytes, &messaging.EnqueueOptions{
+	err = kc.keygenResultQueue.Enqueue(topic, keygenResultBytes, &messaging.EnqueueOptions{
 		IdempotentKey: buildIdempotentKey(keygenMsg.WalletID, sessionID, core.TypeGenerateWalletResultFmt),
 	})
 	if err != nil {
@@ -219,9 +219,9 @@ func (sc *keygenConsumer) handleKeygenError(keygenMsg types.KeygenMessage, error
 }
 
 // Close unsubscribes from the JetStream subject and cleans up resources.
-func (sc *keygenConsumer) Close() error {
-	if sc.jsSub != nil {
-		if err := sc.jsSub.Unsubscribe(); err != nil {
+func (kc *keygenConsumer) Close() error {
+	if kc.jsSub != nil {
+		if err := kc.jsSub.Unsubscribe(); err != nil {
 			logger.Error("KeygenConsumer: Failed to unsubscribe from JetStream", err)
 			return err
 		}

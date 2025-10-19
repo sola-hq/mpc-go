@@ -15,7 +15,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
-	"github.com/spf13/viper"
 )
 
 const (
@@ -41,7 +40,7 @@ type signingConsumer struct {
 	pubsub             messaging.PubSub
 	jsBroker           messaging.MessageBroker
 	peerRegistry       mpc.PeerRegistry
-	mpcThreshold       int
+	threshold          int
 	signingResultQueue messaging.MessageQueue
 
 	// jsSub holds the JetStream subscription, so it can be cleaned up during Close().
@@ -50,24 +49,22 @@ type signingConsumer struct {
 
 // NewSigningConsumer returns a new instance of SigningConsumer.
 func NewSigningConsumer(natsConn *nats.Conn, jsBroker messaging.MessageBroker, pubsub messaging.PubSub, peerRegistry mpc.PeerRegistry, signingResultQueue messaging.MessageQueue) SigningConsumer {
-	mpcThreshold := viper.GetInt("mpc_threshold")
 	return &signingConsumer{
 		natsConn:           natsConn,
 		pubsub:             pubsub,
 		jsBroker:           jsBroker,
 		peerRegistry:       peerRegistry,
-		mpcThreshold:       mpcThreshold,
 		signingResultQueue: signingResultQueue,
 	}
 }
 
 // waitForSufficientPeers waits until enough peers are ready to handle signing requests
 func (sc *signingConsumer) waitForSufficientPeers(ctx context.Context) error {
-	requiredPeers := int64(sc.mpcThreshold + 1) // t+1 peers needed for signing
+	requiredPeers := int64(sc.threshold + 1) // t+1 peers needed for signing
 
 	logger.Info("SigningConsumer: Waiting for sufficient peers before consuming messages",
 		"required", requiredPeers,
-		"threshold", sc.mpcThreshold)
+		"threshold", sc.threshold)
 
 	ticker := time.NewTicker(readinessCheckInterval)
 	defer ticker.Stop()
@@ -155,7 +152,7 @@ func (sc *signingConsumer) handleSigningEvent(msg jetstream.Msg) {
 	}
 
 	if !sc.peerRegistry.AreMajorityReady() {
-		requiredPeers := int64(sc.mpcThreshold + 1)
+		requiredPeers := int64(sc.threshold + 1)
 		err := fmt.Errorf("not enough peers to process signing request: ready=%d, required=%d", sc.peerRegistry.GetReadyPeersCount(), requiredPeers)
 		sc.handleSigningError(signingMsg, types.ErrorCodeNotMajority, err, sessionID)
 		_ = msg.Ack()

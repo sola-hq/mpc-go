@@ -38,11 +38,11 @@ type TestConfig struct {
 	Consul struct {
 		Address string `yaml:"address"`
 	} `yaml:"consul"`
-	MPCThreshold         int    `yaml:"mpc_threshold"`
+	Threshold            int    `yaml:"threshold"`
 	Environment          string `yaml:"environment"`
 	BadgerPassword       string `yaml:"badger_password"`
 	EventInitiatorPubkey string `yaml:"event_initiator_pubkey"`
-	MPCVersion           string `yaml:"mpc_version"`
+	Version              string `yaml:"version"`
 	MaxConcurrentKeygen  int    `yaml:"max_concurrent_keygen"`
 	DbPath               string `yaml:"db_path"`
 }

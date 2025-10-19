@@ -41,10 +41,10 @@ type EventConsumer interface {
 }
 
 type eventConsumer struct {
+	threshold     int
 	node          *mpc.Node
 	pubsub        messaging.PubSub
 	identityStore identity.Store
-	mpcThreshold  int
 
 	keygenResultQueue    messaging.MessageQueue
 	signingResultQueue   messaging.MessageQueue
@@ -74,6 +74,7 @@ func NewEventConsumer(
 	resharingResultQueue messaging.MessageQueue,
 	identityStore identity.Store,
 ) EventConsumer {
+	threshold := viper.GetInt("threshold")
 	maxConcurrentKeygen := viper.GetInt("max_concurrent_keygen")
 	if maxConcurrentKeygen == 0 {
 		maxConcurrentKeygen = DefaultConcurrentKeygen
@@ -115,7 +116,7 @@ func NewEventConsumer(
 		signingResultQueue:     signingResultQueue,
 		resharingResultQueue:   resharingResultQueue,
 		sessionMgr:             sessionMgr,
-		mpcThreshold:           viper.GetInt("mpc_threshold"),
+		threshold:              threshold,
 		maxConcurrentKeygen:    maxConcurrentKeygen,
 		maxConcurrentSigning:   maxConcurrentSigning,
 		maxConcurrentResharing: maxConcurrentResharing,
@@ -177,12 +178,12 @@ func (ec *eventConsumer) handleKeyGenEvent(natMsg *nats.Msg) {
 	}
 
 	walletID := msg.WalletID
-	ecdsaSession, err := ec.node.CreateKeyGenSession(core.SessionTypeECDSA, walletID, ec.mpcThreshold, ec.keygenResultQueue)
+	ecdsaSession, err := ec.node.CreateKeyGenSession(core.SessionTypeECDSA, walletID, ec.threshold, ec.keygenResultQueue)
 	if err != nil {
 		ec.handleKeygenSessionError(walletID, err, "Failed to create ECDSA key generation session", natMsg)
 		return
 	}
-	eddsaSession, err := ec.node.CreateKeyGenSession(core.SessionTypeEDDSA, walletID, ec.mpcThreshold, ec.keygenResultQueue)
+	eddsaSession, err := ec.node.CreateKeyGenSession(core.SessionTypeEDDSA, walletID, ec.threshold, ec.keygenResultQueue)
 	if err != nil {
 		ec.handleKeygenSessionError(walletID, err, "Failed to create EdDSA key generation session", natMsg)
 		return

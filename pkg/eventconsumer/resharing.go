@@ -15,7 +15,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
-	"github.com/spf13/viper"
 )
 
 const (
@@ -36,85 +35,49 @@ type resharingConsumer struct {
 	pubsub               messaging.PubSub
 	jsBroker             messaging.MessageBroker
 	peerRegistry         mpc.PeerRegistry
-	mpcThreshold         int
 	resharingResultQueue messaging.MessageQueue
 
 	jsSub messaging.Subscription
 }
 
 // NewResharingConsumer returns a new instance of ResharingConsumer.
-func NewResharingConsumer(natsConn *nats.Conn, jsBroker messaging.MessageBroker, pubsub messaging.PubSub, peerRegistry mpc.PeerRegistry, resharingResultQueue messaging.MessageQueue) ResharingConsumer {
-	mpcThreshold := viper.GetInt("mpc_threshold")
+func NewResharingConsumer(
+	natsConn *nats.Conn,
+	jsBroker messaging.MessageBroker,
+	pubsub messaging.PubSub,
+	peerRegistry mpc.PeerRegistry,
+	resharingResultQueue messaging.MessageQueue,
+) ResharingConsumer {
 	return &resharingConsumer{
 		natsConn:             natsConn,
 		pubsub:               pubsub,
 		jsBroker:             jsBroker,
 		peerRegistry:         peerRegistry,
-		mpcThreshold:         mpcThreshold,
 		resharingResultQueue: resharingResultQueue,
 	}
 }
 
-func (sc *resharingConsumer) waitForSufficientPeers(ctx context.Context) error {
-	requiredPeers := int64(sc.mpcThreshold + 1)
-
-	logger.Info("ResharingConsumer: Waiting for sufficient peers before consuming messages",
-		"required", requiredPeers,
-		"threshold", sc.mpcThreshold)
-
-	ticker := time.NewTicker(readinessCheckInterval)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-ctx.Done():
-			if ctx.Err() == context.Canceled {
-				return nil
-			}
-			return ctx.Err()
-		case <-ticker.C:
-			readyPeers := sc.peerRegistry.GetReadyPeersCount()
-			if readyPeers >= requiredPeers {
-				logger.Info("ResharingConsumer: Sufficient peers ready, starting message consumption",
-					"ready", readyPeers,
-					"t+1", requiredPeers)
-				return nil
-			}
-			logger.Info("ResharingConsumer: Waiting for more peers to be ready",
-				"ready", readyPeers,
-				"t+1", requiredPeers)
-		}
-	}
-}
-
 // Run subscribes to resharing events and processes them until the context is canceled.
-func (sc *resharingConsumer) Run(ctx context.Context) error {
-	if err := sc.waitForSufficientPeers(ctx); err != nil {
-		if err == context.Canceled {
-			return nil
-		}
-		return fmt.Errorf("failed to wait for sufficient peers: %w", err)
-	}
-
-	sub, err := sc.jsBroker.CreateSubscription(
+func (rc *resharingConsumer) Run(ctx context.Context) error {
+	sub, err := rc.jsBroker.CreateSubscription(
 		ctx,
 		constant.ResharingConsumerStream,
 		constant.ResharingRequestTopic,
-		sc.handleResharingEvent,
+		rc.handleResharingEvent,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to subscribe to resharing events: %w", err)
 	}
-	sc.jsSub = sub
+	rc.jsSub = sub
 	logger.Info("ResharingConsumer: Subscribed to resharing events")
 
 	<-ctx.Done()
 	logger.Info("ResharingConsumer: Context cancelled, shutting down")
 
-	return sc.Close()
+	return rc.Close()
 }
 
-func (sc *resharingConsumer) handleResharingEvent(msg jetstream.Msg) {
+func (rc *resharingConsumer) handleResharingEvent(msg jetstream.Msg) {
 	raw := msg.Data()
 	var resharingMsg types.ResharingMessage
 	sessionID := msg.Headers().Get("SessionID")
@@ -122,21 +85,13 @@ func (sc *resharingConsumer) handleResharingEvent(msg jetstream.Msg) {
 	err := json.Unmarshal(raw, &resharingMsg)
 	if err != nil {
 		logger.Error("ResharingConsumer: Failed to unmarshal resharing message", err)
-		sc.handleError(resharingMsg, types.ErrorCodeUnmarshalFailure, err, sessionID)
-		_ = msg.Ack()
-		return
-	}
-
-	if !sc.peerRegistry.AreMajorityReady() {
-		requiredPeers := int64(sc.mpcThreshold + 1)
-		err := fmt.Errorf("not enough peers to process resharing request: ready=%d, required=%d", sc.peerRegistry.GetReadyPeersCount(), requiredPeers)
-		sc.handleError(resharingMsg, types.ErrorCodeNotMajority, err, sessionID)
+		rc.handleResharingError(resharingMsg, types.ErrorCodeUnmarshalFailure, err, sessionID)
 		_ = msg.Ack()
 		return
 	}
 
 	replyInbox := nats.NewInbox()
-	replySub, err := sc.natsConn.SubscribeSync(replyInbox)
+	replySub, err := rc.natsConn.SubscribeSync(replyInbox)
 	if err != nil {
 		logger.Error("ResharingConsumer: Failed to subscribe to reply inbox", err)
 		_ = msg.Nak()
@@ -151,7 +106,7 @@ func (sc *resharingConsumer) handleResharingEvent(msg jetstream.Msg) {
 	headers := map[string]string{
 		"SessionID": uuid.New().String(),
 	}
-	if err := sc.pubsub.PublishWithReply(MPCResharingEvent, replyInbox, msg.Data(), headers); err != nil {
+	if err := rc.pubsub.PublishWithReply(MPCResharingEvent, replyInbox, msg.Data(), headers); err != nil {
 		logger.Error("ResharingConsumer: Failed to publish resharing event with reply", err)
 		_ = msg.Nak()
 		return
@@ -187,7 +142,7 @@ func (sc *resharingConsumer) handleResharingEvent(msg jetstream.Msg) {
 	}
 }
 
-func (sc *resharingConsumer) handleError(msg types.ResharingMessage, errorCode types.ErrorCode, err error, sessionID string) {
+func (rc *resharingConsumer) handleResharingError(msg types.ResharingMessage, errorCode types.ErrorCode, err error, sessionID string) {
 	resharingResult := types.ResharingResponse{
 		ErrorCode:    errorCode,
 		WalletID:     msg.WalletID,
@@ -202,7 +157,7 @@ func (sc *resharingConsumer) handleError(msg types.ResharingMessage, errorCode t
 		return
 	}
 
-	err = sc.resharingResultQueue.Enqueue(constant.ResharingResultCompleteTopic, resharingResultBytes, &messaging.EnqueueOptions{
+	err = rc.resharingResultQueue.Enqueue(constant.ResharingResultCompleteTopic, resharingResultBytes, &messaging.EnqueueOptions{
 		IdempotentKey: buildIdempotentKey(msg.WalletID, sessionID, core.TypeResharingWalletResultFmt),
 	})
 	if err != nil {
@@ -210,9 +165,9 @@ func (sc *resharingConsumer) handleError(msg types.ResharingMessage, errorCode t
 	}
 }
 
-func (sc *resharingConsumer) Close() error {
-	if sc.jsSub != nil {
-		if err := sc.jsSub.Unsubscribe(); err != nil {
+func (rc *resharingConsumer) Close() error {
+	if rc.jsSub != nil {
+		if err := rc.jsSub.Unsubscribe(); err != nil {
 			logger.Error("ResharingConsumer: Failed to unsubscribe from JetStream", err)
 			return err
 		}
