@@ -36,6 +36,8 @@ func NewBenchmarkCmd() *cobra.Command {
 
 	// Add subcommands
 	cmd.AddCommand(newKeygenBenchmarkCmd())
+	cmd.AddCommand(newSigningBenchmarkCmd())
+	cmd.AddCommand(newResharingBenchmarkCmd())
 
 	return cmd
 }

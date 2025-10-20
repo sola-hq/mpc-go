@@ -129,7 +129,7 @@ The application uses a YAML configuration file (`config.yaml`) with the followin
 
 ### MPC Configuration
 
-- `mpc_threshold`: Threshold for multi-party computation
+- `threshold`: Threshold for multi-party computation
 - `event_initiator_pubkey`: Public key of the event initiator
 - `max_concurrent_keygen`: Maximum concurrent key generation operations
 
@@ -383,7 +383,7 @@ Update your `config.yaml` file with the KMS public key and algorithm:
 
 ```yaml
 # MPC Configuration  
-mpc_threshold: 2
+threshold: 2
 event_initiator_pubkey: "3059301306072a8648ce3d020106082a8648ce3d030107034200042b7539fc51123c3ba53c71e244be71d2d3138cbed4909fa259b924b56c92148cadd410cf98b789269d7f672c3ba978e99fc1f01c87daee97292d3666357738fd"
 event_initiator_algorithm: "p256"
 

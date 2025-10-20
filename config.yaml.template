@@ -2,8 +2,7 @@ nats:
   url: nats://127.0.0.1:4222
 consul:
   address: localhost:8500
-
-mpc_threshold: 2
+threshold: 2
 environment: development
 badger_password: "F))ysJp?E]ol&I;^"
 event_initiator_algorithm: "ed25519"  # or "ed25519", default: ed25519

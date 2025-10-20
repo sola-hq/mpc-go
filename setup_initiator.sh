@@ -4,7 +4,7 @@ echo "🚀 Setting up Event Initiator..."
 
 # Generate the event initiator
 echo "📝 Generating event initiator..."
-mpcium-cli generate-initiator
+mpc-cli initiator generate --overwrite
 
 # Extract the public key from the generated file
 if [ -f "event_initiator.identity.json" ]; then
@@ -19,7 +19,7 @@ if [ -f "event_initiator.identity.json" ]; then
             # Check if event_initiator_pubkey already exists
             if grep -q "event_initiator_pubkey:" config.yaml; then
                 # Replace existing line
-                sed -i "s/event_initiator_pubkey: .*/event_initiator_pubkey: \"$PUBLIC_KEY\"/" config.yaml
+                sed -i '' "s/event_initiator_pubkey: .*/event_initiator_pubkey: \"$PUBLIC_KEY\"/" config.yaml
             else
                 # Add new line
                 echo "event_initiator_pubkey: \"$PUBLIC_KEY\"" >> config.yaml

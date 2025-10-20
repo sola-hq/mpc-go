@@ -116,7 +116,7 @@ nats:
 consul:
   address: localhost:8500
 
-mpc_threshold: 2
+threshold: 2
 environment: development
 badger_password: "your_badger_password"
 event_initiator_pubkey: "your_event_initiator_pubkey"

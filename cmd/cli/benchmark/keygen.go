@@ -10,14 +10,15 @@ import (
 )
 
 var (
-	keygenTimeout   int
-	keygenBatchSize int
+	keygenNumOperations int
+	keygenTimeout       int
+	keygenBatchSize     int
 )
 
 // newKeygenBenchmarkCmd creates a new keygen benchmark command
 func newKeygenBenchmarkCmd() *cobra.Command {
 	var cmd = &cobra.Command{
-		Use:   "keygen <num_operations>",
+		Use:   "keygen -n<num_operations> -t<timeout> -b<batch_size>",
 		Short: "Benchmark keygen operations",
 		Long:  "Benchmark keygen operations",
 		Args:  cobra.ExactArgs(1),
@@ -25,6 +26,7 @@ func newKeygenBenchmarkCmd() *cobra.Command {
 	}
 
 	// Add flags
+	cmd.Flags().IntVarP(&keygenNumOperations, "num-operations", "n", 1, "Number of operations to run")
 	cmd.Flags().IntVarP(&keygenTimeout, "timeout", "t", 60, "Timeout per operation in seconds")
 	cmd.Flags().IntVarP(&keygenBatchSize, "batch-size", "b", 10, "Number of operations per batch")
 
@@ -32,15 +34,7 @@ func newKeygenBenchmarkCmd() *cobra.Command {
 }
 
 func runKeygenBenchmark(cmd *cobra.Command, args []string) error {
-	if len(args) < 1 {
-		return fmt.Errorf("missing required argument: num_operations")
-	}
-
-	numOps := args[0]
-	n, err := parseNumOps(numOps)
-	if err != nil {
-		return err
-	}
+	n := keygenNumOperations
 
 	timeout := time.Duration(keygenTimeout) * time.Second
 
@@ -79,12 +73,12 @@ func runKeygenBenchmark(cmd *cobra.Command, args []string) error {
 
 	// Run operations
 	startTime := time.Now()
-	for i := 0; i < n; i++ {
+	for i := range n {
 		// Generate unique wallet ID to avoid duplicates across runs
-		walletID := generateUniqueID(fmt.Sprintf("benchmark-keygen-%d", i))
+		reqID := generateUniqueID(fmt.Sprintf("benchmark-keygen-%d", i))
 
 		result := OperationResult{
-			ID:        walletID,
+			ID:        reqID,
 			StartTime: time.Now(),
 		}
 
@@ -94,7 +88,7 @@ func runKeygenBenchmark(cmd *cobra.Command, args []string) error {
 
 		wg.Add(1)
 
-		err := mpcClient.CreateWallet(walletID)
+		err := mpcClient.CreateWallet(reqID)
 		if err != nil {
 			mu.Lock()
 			results[i].Completed = true
@@ -126,7 +120,7 @@ func runKeygenBenchmark(cmd *cobra.Command, args []string) error {
 	totalTime := time.Since(startTime)
 
 	// Calculate results
-	benchResult := calculateBenchmarkResult(results, totalTime, 1, []time.Duration{totalTime})
+	benchResult := calculateBenchmarkResult(results, totalTime, keygenBatchSize, []time.Duration{totalTime})
 	if err := printBenchmarkResult("Keygen", benchResult); err != nil {
 		return fmt.Errorf("failed to write benchmark results: %w", err)
 	}

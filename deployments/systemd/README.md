@@ -146,7 +146,7 @@ Edit `/etc/mpc/config.yaml` to include:
 
 - NATS server connection details and credentials
 - Consul service discovery configuration
-- MPC threshold settings (`mpc_threshold`)
+- MPC threshold settings (`threshold`)
 - Event initiator public key (will be updated in Step 5)
 
 #### Step 6: Generate Event Initiator Key

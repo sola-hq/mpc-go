@@ -13,7 +13,7 @@ consul:
   token: ""
   password: ""
 
-mpc_threshold: 1
+threshold: 1
 environment: production # Set to production for production environment
 backup_enabled: true
 event_initiator_pubkey: ""
