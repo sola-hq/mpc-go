@@ -4,7 +4,7 @@ consul:
   address: localhost:8500
 threshold: 2
 environment: development
-badger_password: "F))ysJp?E]ol&I;^"
+badger_password: ReKxjDyMlr7MWw2balPXjQvpoUjdhcmw
 event_initiator_algorithm: "ed25519"  # or "ed25519", default: ed25519
 event_initiator_pubkey: "event_initiator_pubkey"
 db_path: "."  

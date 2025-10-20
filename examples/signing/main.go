@@ -6,6 +6,7 @@ import (
 	"os/signal"
 	"slices"
 	"syscall"
+	"time"
 
 	"github.com/fystack/mpcium/pkg/client"
 	"github.com/fystack/mpcium/pkg/client/signer"
@@ -68,10 +69,14 @@ func main() {
 	// 2) Once wallet exists, immediately fire a SignTransaction
 	txID := uuid.New().String()
 	dummyTx := []byte("deadbeef") // replace with real transaction bytes
+	signingCh := make(chan bool, 1)
+
+	// Record signing start time
+	startTime := time.Now()
 
 	txMsg := &types.SigningMessage{
 		KeyType:  types.KeyTypeEd25519,
-		WalletID: "ad24f678-b04b-4149-bcf6-bf9c90df8e63", // Use the generated wallet ID
+		WalletID: "eb29afb0-3bc3-45af-bbcb-a9a79abc057b", // Use the generated wallet ID
 		TxID:     txID,
 		Tx:       dummyTx,
 	}
@@ -83,18 +88,35 @@ func main() {
 
 	// 3) Listen for signing results
 	err = mpcClient.OnSignResult(func(response types.SigningResponse) {
+		// Calculate signing duration
+		duration := time.Since(startTime)
+
 		logger.Info("Signing result received",
 			"txID", response.TxID,
+			"errcode", response.ErrorCode,
+			"errreason", response.ErrorReason,
 			"signature", fmt.Sprintf("%x", response.Signature),
+			"duration", duration.String(),
+			"duration(ms)", duration.Milliseconds(),
 		)
+		// Notify main program to exit
+		signingCh <- true
 	})
 	if err != nil {
 		logger.Fatal("Failed to subscribe to OnSignResult", err)
 	}
 
+	// Wait for syscall signal
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM)
-	<-stop
 
-	fmt.Println("Shutting down.")
+	select {
+	case <-signingCh:
+		// Calculate total duration
+		totalDuration := time.Since(startTime)
+		fmt.Printf("Signing completed successfully in %s (%d ms). Exiting.\n",
+			totalDuration.String(), totalDuration.Milliseconds())
+	case <-stop:
+		fmt.Println("Received interrupt signal. Shutting down.")
+	}
 }
