@@ -105,8 +105,8 @@ func main() {
 
 			logger.Info("Wallet created",
 				"walletID", response.WalletID,
-				"duration_seconds", fmt.Sprintf("%.3f", duration),
-				"accumulated_time_seconds", fmt.Sprintf("%.3f", accumulated),
+				"duration(s)", fmt.Sprintf("%.3f", duration),
+				"accumulated_time(s)", fmt.Sprintf("%.3f", accumulated),
 				"count_so_far", countSoFar,
 			)
 

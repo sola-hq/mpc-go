@@ -72,10 +72,14 @@ func NewRegistry(
 		logger.Fatal("threshold must be greater than 0", nil)
 	}
 
+	otherPeerNodeIDs := lo.Filter(peerNodeIDs, func(item string, _index int) bool {
+		return item != nodeID
+	})
+
 	reg := &registry{
 		consulKV:      consulKV,
 		nodeID:        nodeID,
-		peerNodeIDs:   getPeerIDsExceptSelf(nodeID, peerNodeIDs),
+		peerNodeIDs:   otherPeerNodeIDs,
 		readyMap:      make(map[string]bool),
 		readyCount:    1, // self
 		healthCheck:   directMessaging,
@@ -88,16 +92,6 @@ func NewRegistry(
 	go reg.consumeECDHErrors()
 
 	return reg
-}
-
-func getPeerIDsExceptSelf(nodeID string, peerNodeIDs []string) []string {
-	peerIDs := make([]string, 0, len(peerNodeIDs))
-	for _, peerID := range peerNodeIDs {
-		if peerID != nodeID {
-			peerIDs = append(peerIDs, peerID)
-		}
-	}
-	return peerIDs
 }
 
 func (r *registry) readyKey(nodeID string) string {

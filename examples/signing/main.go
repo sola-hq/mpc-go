@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/hex"
 	"fmt"
 	"os"
 	"os/signal"
@@ -22,6 +23,7 @@ func main() {
 	const environment = "dev"
 	config.InitViperConfig("")
 	logger.Init(environment, true)
+	walletID := "2aafaa33-8a79-438e-a5d4-1d11f4598a40"
 
 	algorithm := viper.GetString("event_initiator_algorithm")
 	if algorithm == "" {
@@ -76,7 +78,7 @@ func main() {
 
 	txMsg := &types.SigningMessage{
 		KeyType:  types.KeyTypeEd25519,
-		WalletID: "a3c1ee50-ff6e-455c-a8e2-37456c8143f7", // Use the generated wallet ID
+		WalletID: walletID,
 		TxID:     txID,
 		Tx:       dummyTx,
 	}
@@ -93,10 +95,10 @@ func main() {
 
 		logger.Info("Signing result received",
 			"txID", response.TxID,
-			"errcode", response.ErrorCode,
-			"errreason", response.ErrorReason,
-			"signature", fmt.Sprintf("%x", response.Signature),
-			"duration", duration.String(),
+			"err_code", response.ErrorCode,
+			"err_reason", response.ErrorReason,
+			"signature", hex.EncodeToString(response.Signature),
+			"duration(s)", fmt.Sprintf("%.3f", duration.Seconds()),
 			"duration(ms)", duration.Milliseconds(),
 		)
 		// Notify main program to exit

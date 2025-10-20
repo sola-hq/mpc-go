@@ -27,7 +27,7 @@ func main() {
 	if algorithm == "" {
 		algorithm = string(types.EventInitiatorKeyTypeEd25519)
 	}
-
+	walletID := "2aafaa33-8a79-438e-a5d4-1d11f4598a40"
 	// Validate algorithm
 	if !slices.Contains(
 		[]string{
@@ -83,7 +83,6 @@ func main() {
 	if err != nil {
 		logger.Fatal("Failed to subscribe to OnResharingResult", err)
 	}
-	walletID := "81c8a932-e618-488f-acd8-5b5219df574d"
 
 	resharingMsg := &types.ResharingMessage{
 		SessionID: uuid.NewString(),
