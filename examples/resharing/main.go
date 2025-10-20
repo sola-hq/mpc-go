@@ -6,6 +6,7 @@ import (
 	"os/signal"
 	"slices"
 	"syscall"
+	"time"
 
 	"github.com/fystack/mpcium/pkg/client"
 	"github.com/fystack/mpcium/pkg/client/signer"
@@ -53,6 +54,9 @@ func main() {
 	defer natsConn.Drain()
 	defer natsConn.Close()
 
+	// Record resharing start time
+	startTime := time.Now()
+
 	localSigner, err := signer.NewLocalSigner(types.EventInitiatorKeyType(algorithm), signer.LocalSignerOptions{
 		KeyPath: "./event_initiator.key",
 	})
@@ -64,9 +68,11 @@ func main() {
 		NatsConn: natsConn,
 		Signer:   localSigner,
 	})
+	resharingDone := make(chan bool, 1)
 
 	// 3) Listen for signing results
 	err = mpcClient.OnResharingResult(func(result types.ResharingResponse) {
+		resharingDone <- true
 		logger.Info("Resharing result received",
 			"walletID", result.WalletID,
 			"pubKey", fmt.Sprintf("%x", result.PubKey),
@@ -77,13 +83,14 @@ func main() {
 	if err != nil {
 		logger.Fatal("Failed to subscribe to OnResharingResult", err)
 	}
+	walletID := "81c8a932-e618-488f-acd8-5b5219df574d"
 
 	resharingMsg := &types.ResharingMessage{
 		SessionID: uuid.NewString(),
-		WalletID:  "506d2d40-483a-49f1-93c8-27dd4fe9740c",
+		WalletID:  walletID,
 		NodeIDs: []string{
-			"c95c340e-5a18-472d-b9b0-5ac68218213a",
-			"ac37e85f-caca-4bee-8a3a-49a0fe35abff",
+			"FD97D371-4C75-4F59-9159-759F4C71543C",
+			"504ACBA3-0958-4E10-B6E6-6B274579BF6A",
 		}, // new peer IDs
 
 		NewThreshold: 1, // t+1 <= len(NodeIDs)
@@ -95,9 +102,18 @@ func main() {
 	}
 	fmt.Printf("Resharing(%q) sent, awaiting result...\n", resharingMsg.WalletID)
 
+	// Wait for syscall signal
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM)
-	<-stop
 
-	fmt.Println("Shutting down.")
+	// Wait for resharing to complete or receive interrupt signal
+	select {
+	case <-resharingDone:
+		// Calculate total duration
+		totalDuration := time.Since(startTime)
+		fmt.Printf("Resharing(%q) completed cost %s (%dms)", walletID,
+			totalDuration.String(), totalDuration.Milliseconds())
+	case <-stop:
+		fmt.Println("Received interrupt signal. Shutting down.")
+	}
 }

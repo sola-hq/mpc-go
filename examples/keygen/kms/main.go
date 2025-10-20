@@ -68,7 +68,7 @@ func main() {
 
 	var walletStartTimes sync.Map
 	var walletIDs []string
-	var walletIDsMu sync.Mutex
+	var walletIDsMutex sync.Mutex
 	var wg sync.WaitGroup
 	var completedCount int32
 
@@ -79,9 +79,9 @@ func main() {
 		walletID := uuid.New().String()
 		walletStartTimes.Store(walletID, time.Now())
 
-		walletIDsMu.Lock()
+		walletIDsMutex.Lock()
 		walletIDs = append(walletIDs, walletID)
-		walletIDsMu.Unlock()
+		walletIDsMutex.Unlock()
 	}
 
 	// STEP 2: Register the result handler AFTER all walletIDs are stored
@@ -142,9 +142,9 @@ func main() {
 		)
 
 		// Save wallet IDs to wallets.json
-		walletIDsMu.Lock()
+		walletIDsMutex.Lock()
 		data, err := json.MarshalIndent(walletIDs, "", "  ")
-		walletIDsMu.Unlock()
+		walletIDsMutex.Unlock()
 		if err != nil {
 			logger.Error("Failed to marshal wallet IDs", err)
 		} else {

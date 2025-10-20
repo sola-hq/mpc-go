@@ -4,9 +4,9 @@ consul:
   address: localhost:8500
 threshold: 2
 environment: development
-badger_password: ReKxjDyMlr7MWw2balPXjQvpoUjdhcmw
+badger_password: "{{.BadgerPassword}}"
 event_initiator_algorithm: "ed25519"  # or "ed25519", default: ed25519
-event_initiator_pubkey: "event_initiator_pubkey"
+event_initiator_pubkey: "{{.EventInitiatorPubkey}}"
 db_path: "."  
 backup_enabled: true
 backup_period_seconds: 300 # 5 minutes
