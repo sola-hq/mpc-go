@@ -111,18 +111,6 @@ func generateUniqueID(prefix string) string {
 	return fmt.Sprintf("%s-%d-%d-%s", prefix, time.Now().UnixNano(), os.Getpid(), randomHex)
 }
 
-func parseNumOps(numOps string) (int, error) {
-	var n int
-	_, err := fmt.Sscanf(numOps, "%d", &n)
-	if err != nil {
-		return 0, fmt.Errorf("invalid number of operations: %s", numOps)
-	}
-	if n <= 0 {
-		return 0, fmt.Errorf("number of operations must be positive")
-	}
-	return n, nil
-}
-
 func calculateBenchmarkResult(results []OperationResult, totalTime time.Duration, batchSize int, batchTimes []time.Duration) BenchmarkResult {
 	var operationTimes []time.Duration
 	successfulOps := 0
