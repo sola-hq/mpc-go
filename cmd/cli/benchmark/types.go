@@ -26,7 +26,6 @@ type OperationResult struct {
 	StartTime   time.Time
 	EndTime     time.Time
 	Completed   bool
-	Success     bool
 	ErrorCode   types.ErrorCode
 	ErrorReason string
 }

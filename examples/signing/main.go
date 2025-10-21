@@ -76,8 +76,13 @@ func main() {
 	// Record signing start time
 	startTime := time.Now()
 
+	fmt.Println("signMessage", string(dummyTx))
+	fmt.Println("txID", txID)
+	fmt.Println("walletID", walletID)
+	fmt.Println("keytype", types.KeyTypeSecp256k1)
+
 	txMsg := &types.SigningMessage{
-		KeyType:  types.KeyTypeEd25519,
+		KeyType:  types.KeyTypeSecp256k1,
 		WalletID: walletID,
 		TxID:     txID,
 		Tx:       dummyTx,
@@ -97,6 +102,9 @@ func main() {
 			"txID", response.TxID,
 			"err_code", response.ErrorCode,
 			"err_reason", response.ErrorReason,
+			"r", hex.EncodeToString(response.R),
+			"s", hex.EncodeToString(response.S),
+			"signature_recovery", hex.EncodeToString(response.SignatureRecovery),
 			"signature", hex.EncodeToString(response.Signature),
 			"duration(s)", fmt.Sprintf("%.3f", duration.Seconds()),
 			"duration(ms)", duration.Milliseconds(),

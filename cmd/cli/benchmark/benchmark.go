@@ -118,7 +118,7 @@ func calculateBenchmarkResult(results []OperationResult, totalTime time.Duration
 
 	for _, result := range results {
 		if result.Completed {
-			if result.Success {
+			if result.ErrorCode == "" {
 				successfulOps++
 				if !result.EndTime.IsZero() {
 					operationTimes = append(operationTimes, result.EndTime.Sub(result.StartTime))
@@ -182,6 +182,7 @@ func printBenchmarkResult(operationType string, result BenchmarkResult) error {
 	// Print to console
 	fmt.Print(reportContent)
 
+	fmt.Println("outputFile", outputFile)
 	// Write to file if specified
 	if outputFile != "" {
 		if err := writeBenchmarkToFile(reportContent, outputFile, operationType); err != nil {

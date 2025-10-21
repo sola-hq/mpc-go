@@ -79,11 +79,8 @@ func runResharingBenchmark(cmd *cobra.Command, args []string) error {
 			if strings.HasPrefix(results[i].ID, result.WalletID) && !results[i].Completed {
 				results[i].EndTime = time.Now()
 				results[i].Completed = true
-				results[i].Success = result.ErrorCode == "" // empty means success
-				if !results[i].Success {
-					results[i].ErrorReason = result.ErrorReason
-					results[i].ErrorCode = result.ErrorCode
-				}
+				results[i].ErrorReason = result.ErrorReason
+				results[i].ErrorCode = result.ErrorCode
 				wg.Done()
 				found = true
 				break
@@ -99,7 +96,10 @@ func runResharingBenchmark(cmd *cobra.Command, args []string) error {
 
 	// Run operations
 	startTime := time.Now()
-	for i := 0; i < n; i++ {
+	var batchTimes []time.Duration
+
+	for i := range n {
+		batchStart := time.Now()
 		// Generate unique session ID to avoid duplicates across runs
 		sessionID := generateUniqueID(fmt.Sprintf("benchmark-reshare-%s-%d", reshareWalletID, i))
 
@@ -126,7 +126,7 @@ func runResharingBenchmark(cmd *cobra.Command, args []string) error {
 		if err != nil {
 			mu.Lock()
 			results[i].Completed = true
-			results[i].Success = false
+			results[i].ErrorCode = types.GetErrorCodeFromError(err)
 			results[i].ErrorReason = err.Error()
 			results[i].EndTime = time.Now()
 			mu.Unlock()
@@ -135,6 +135,8 @@ func runResharingBenchmark(cmd *cobra.Command, args []string) error {
 
 		// Add small delay between operations
 		time.Sleep(10 * time.Millisecond)
+
+		batchTimes = append(batchTimes, time.Since(batchStart))
 	}
 
 	// Wait for all operations with timeout
@@ -154,7 +156,7 @@ func runResharingBenchmark(cmd *cobra.Command, args []string) error {
 	totalTime := time.Since(startTime)
 
 	// Calculate results
-	benchResult := calculateBenchmarkResult(results, totalTime, 1, []time.Duration{totalTime})
+	benchResult := calculateBenchmarkResult(results, totalTime, reshareBatchSize, batchTimes)
 	if err := printBenchmarkResult("Reshare", benchResult); err != nil {
 		return fmt.Errorf("failed to write benchmark results: %w", err)
 	}

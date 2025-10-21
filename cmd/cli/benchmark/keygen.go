@@ -21,7 +21,6 @@ func newKeygenBenchmarkCmd() *cobra.Command {
 		Use:   "keygen -n<num_operations> -t<timeout> -b<batch_size>",
 		Short: "Benchmark keygen operations",
 		Long:  "Benchmark keygen operations",
-		Args:  cobra.ExactArgs(1),
 		RunE:  runKeygenBenchmark,
 	}
 
@@ -36,7 +35,7 @@ func newKeygenBenchmarkCmd() *cobra.Command {
 func runKeygenBenchmark(cmd *cobra.Command, args []string) error {
 	n := keygenNumOperations
 
-	timeout := time.Duration(keygenTimeout) * time.Second
+	timeout := time.Duration(keygenTimeout) * time.Second * time.Duration(n)
 
 	mpcClient, err := createMPCClient()
 	if err != nil {
@@ -44,24 +43,23 @@ func runKeygenBenchmark(cmd *cobra.Command, args []string) error {
 	}
 
 	fmt.Printf("Starting keygen benchmark with %d operations...\n", n)
+	fmt.Printf("Timeout: %v seconds\n", timeout.Seconds())
 
 	var results []OperationResult
 	var wg sync.WaitGroup
 	var mu sync.Mutex
 
 	// Set up result listener
-	err = mpcClient.OnWalletCreationResult(func(result types.KeygenResponse) {
+	err = mpcClient.OnWalletCreationResult(func(response types.KeygenResponse) {
 		mu.Lock()
 		defer mu.Unlock()
 
 		for i := range results {
-			if results[i].ID == result.WalletID && !results[i].Completed {
+			if results[i].ID == response.WalletID && !results[i].Completed {
 				results[i].EndTime = time.Now()
 				results[i].Completed = true
-				if results[i].ErrorCode != "" {
-					results[i].ErrorReason = result.ErrorReason
-					results[i].ErrorCode = result.ErrorCode
-				}
+				results[i].ErrorCode = response.ErrorCode
+				results[i].ErrorReason = response.ErrorReason
 				wg.Done()
 				break
 			}
@@ -73,7 +71,10 @@ func runKeygenBenchmark(cmd *cobra.Command, args []string) error {
 
 	// Run operations
 	startTime := time.Now()
+	var batchTimes []time.Duration
+
 	for i := range n {
+		batchStart := time.Now()
 		// Generate unique wallet ID to avoid duplicates across runs
 		reqID := generateUniqueID(fmt.Sprintf("benchmark-keygen-%d", i))
 
@@ -90,9 +91,10 @@ func runKeygenBenchmark(cmd *cobra.Command, args []string) error {
 
 		err := mpcClient.CreateWallet(reqID)
 		if err != nil {
+			fmt.Printf("CreateWallet failed for wallet %s: %v\n", reqID, err)
 			mu.Lock()
 			results[i].Completed = true
-			results[i].Success = false
+			results[i].ErrorCode = types.GetErrorCodeFromError(err)
 			results[i].ErrorReason = err.Error()
 			results[i].EndTime = time.Now()
 			mu.Unlock()
@@ -101,6 +103,8 @@ func runKeygenBenchmark(cmd *cobra.Command, args []string) error {
 
 		// Add small delay between operations to avoid overwhelming the system
 		time.Sleep(10 * time.Millisecond)
+
+		batchTimes = append(batchTimes, time.Since(batchStart))
 	}
 
 	// Wait for all operations with timeout
@@ -111,16 +115,15 @@ func runKeygenBenchmark(cmd *cobra.Command, args []string) error {
 	}()
 
 	select {
-	case <-done:
-		// All operations completed
-	case <-time.After(timeout * time.Duration(n)):
+	case <-done: // All operations completed
+	case <-time.After(timeout):
 		fmt.Println("Timeout reached, some operations may still be pending")
 	}
 
 	totalTime := time.Since(startTime)
 
 	// Calculate results
-	benchResult := calculateBenchmarkResult(results, totalTime, keygenBatchSize, []time.Duration{totalTime})
+	benchResult := calculateBenchmarkResult(results, totalTime, keygenBatchSize, batchTimes)
 	if err := printBenchmarkResult("Keygen", benchResult); err != nil {
 		return fmt.Errorf("failed to write benchmark results: %w", err)
 	}
