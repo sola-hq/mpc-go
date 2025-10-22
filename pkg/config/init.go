@@ -60,11 +60,11 @@ func InitViperConfig(configPath string) {
 		viper.SetConfigFile(configPath)
 	} else {
 		// Use default behavior - search for config.yaml in common locations
-		viper.SetConfigName("config")         // name of config file (without extension)
-		viper.SetConfigType("yaml")           // REQUIRED if the config file does not have the extension in the name
-		viper.AddConfigPath(".")              // optionally look for config in the working directory
-		viper.AddConfigPath("/etc/mpcium/")   // look for config in /etc/mpcium/
-		viper.AddConfigPath("$HOME/.mpcium/") // look for config in home directory
+		viper.SetConfigName("config")      // name of config file (without extension)
+		viper.SetConfigType("yaml")        // REQUIRED if the config file does not have the extension in the name
+		viper.AddConfigPath(".")           // optionally look for config in the working directory
+		viper.AddConfigPath("/etc/mpc/")   // look for config in /etc/mpc/
+		viper.AddConfigPath("$HOME/.mpc/") // look for config in home directory
 	}
 	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
 	viper.AutomaticEnv()

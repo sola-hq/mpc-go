@@ -3,9 +3,9 @@ nats:
   username: ""
   password: ""
   tls:
-   client_cert: "/etc/mpcium/certs/client-cert.pem"
-   client_key: "/etc/mpcium/certs/client-key.pem"
-   ca_cert: "/etc/mpcium/certs/rootCA.pem"
+   client_cert: "/etc/mpc/certs/client-cert.pem"
+   client_key: "/etc/mpc/certs/client-key.pem"
+   ca_cert: "/etc/mpc/certs/rootCA.pem"
 
 consul:
   address: https://consul.example.com
