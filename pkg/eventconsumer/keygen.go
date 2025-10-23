@@ -207,8 +207,8 @@ func (kc *keygenConsumer) handleKeygenError(keygenMsg types.KeygenMessage, error
 		return
 	}
 
-	topic := fmt.Sprintf(core.TypeGenerateWalletResultFmt, keygenResult.WalletID)
-	err = kc.keygenResultQueue.Enqueue(topic, keygenResultBytes, &messaging.EnqueueOptions{
+	key := fmt.Sprintf(core.TypeGenerateWalletResultFmt, keygenMsg.WalletID)
+	err = kc.keygenResultQueue.Enqueue(key, keygenResultBytes, &messaging.EnqueueOptions{
 		IdempotentKey: buildIdempotentKey(keygenMsg.WalletID, sessionID, core.TypeGenerateWalletResultFmt),
 	})
 	if err != nil {

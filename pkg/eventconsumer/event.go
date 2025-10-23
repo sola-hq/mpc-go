@@ -271,14 +271,14 @@ func (ec *eventConsumer) handleKeyGenEvent(natMsg *nats.Msg) {
 	if err := ec.keygenResultQueue.Enqueue(
 		key,
 		payload,
-		&messaging.EnqueueOptions{IdempotentKey: composeKeygenResultIdempotentKey(walletID, natMsg)},
+		&messaging.EnqueueOptions{IdempotentKey: composeKeygenIdempotentKey(walletID, natMsg)},
 	); err != nil {
 		logger.Error("Failed to publish key generation success message", err)
 		ec.handleKeygenSessionError(walletID, err, "Failed to publish key generation success message", natMsg)
 		return
 	}
 	ec.sendReplyToRemoveMsg(natMsg)
-	logger.Info("[COMPLETED KEY GEN] Key generation completed successfully", "walletID", walletID)
+	logger.Info("[COMPLETED KEYGEN] Key generation succeed", "walletID", walletID)
 }
 
 // handleKeygenSessionError handles errors that occur during key generation
@@ -301,7 +301,7 @@ func (ec *eventConsumer) handleKeygenSessionError(walletID string, err error, co
 
 	key := fmt.Sprintf(core.TypeGenerateWalletResultFmt, walletID)
 	err = ec.keygenResultQueue.Enqueue(key, keygenResultBytes, &messaging.EnqueueOptions{
-		IdempotentKey: composeKeygenResultIdempotentKey(walletID, natMsg),
+		IdempotentKey: composeKeygenIdempotentKey(walletID, natMsg),
 	})
 	if err != nil {
 		logger.Error("Failed to enqueue keygen result event", err,
@@ -862,7 +862,7 @@ func composeIdempotentKey(baseID string, natMsg *nats.Msg, formatTemplate string
 	return fmt.Sprintf(formatTemplate, uniqueKey)
 }
 
-func composeKeygenResultIdempotentKey(walletID string, natMsg *nats.Msg) string {
+func composeKeygenIdempotentKey(walletID string, natMsg *nats.Msg) string {
 	return composeIdempotentKey(walletID, natMsg, core.TypeGenerateWalletResultFmt)
 }
 

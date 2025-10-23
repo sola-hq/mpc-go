@@ -23,7 +23,7 @@ func main() {
 	const environment = "dev"
 	config.InitViperConfig("")
 	logger.Init(environment, true)
-	walletID := "2aafaa33-8a79-438e-a5d4-1d11f4598a40"
+	walletID := "765791bc-b9cc-4608-8deb-6c518f776430"
 
 	algorithm := viper.GetString("event_initiator_algorithm")
 	if algorithm == "" {
@@ -75,12 +75,6 @@ func main() {
 
 	// Record signing start time
 	startTime := time.Now()
-
-	fmt.Println("signMessage", string(dummyTx))
-	fmt.Println("txID", txID)
-	fmt.Println("walletID", walletID)
-	fmt.Println("keytype", types.KeyTypeSecp256k1)
-
 	txMsg := &types.SigningMessage{
 		KeyType:  types.KeyTypeSecp256k1,
 		WalletID: walletID,
