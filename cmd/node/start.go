@@ -130,15 +130,17 @@ func runNode(cmd *cobra.Command, args []string) error {
 
 	directMessaging := messaging.NewNatsDirectMessaging(natsConn)
 	messageQueueMgr := messaging.NewNATsMessageQueueManager(
-		constant.MPCStreamName,
+		constant.StreamName,
 		subjects,
 		natsConn,
 	)
 
 	genKeyResultQueue := messageQueueMgr.NewMessageQueue(constant.KeygenResultQueueName)
 	defer genKeyResultQueue.Close()
+
 	signingResultQueue := messageQueueMgr.NewMessageQueue(constant.SigningResultQueueName)
 	defer signingResultQueue.Close()
+
 	resharingResultQueue := messageQueueMgr.NewMessageQueue(constant.ResharingResultQueueName)
 	defer resharingResultQueue.Close()
 

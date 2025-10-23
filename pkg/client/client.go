@@ -78,7 +78,7 @@ func NewMPCClient(opts Options) types.Initiator {
 		constant.ResharingResultTopic,
 	}
 
-	messageQueueMgr := messaging.NewNATsMessageQueueManager(constant.MPCStreamName, subjects, opts.NatsConn)
+	messageQueueMgr := messaging.NewNATsMessageQueueManager(constant.StreamName, subjects, opts.NatsConn)
 
 	keygenResultQueue := messageQueueMgr.NewMessageQueue(constant.KeygenResultQueueName)
 	signingResultQueue := messageQueueMgr.NewMessageQueue(constant.SigningResultQueueName)

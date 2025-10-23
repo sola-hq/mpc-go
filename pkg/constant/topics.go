@@ -4,7 +4,7 @@ package constant
 
 const (
 	// MPC stream name
-	MPCStreamName = "mpc"
+	StreamName = "mpc"
 
 	// Request topics (with wildcards)
 	KeygenRequestTopic    = "mpc.keygen_request.*"
