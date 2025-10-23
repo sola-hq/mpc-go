@@ -215,14 +215,14 @@ func (c *initiator) Resharing(msg *types.ResharingMessage) error {
 func (c *initiator) OnResharingResult(callback func(event types.ResharingResponse)) error {
 
 	err := c.resharingResultQueue.Dequeue(constant.ResharingResultTopic, func(msg []byte) error {
-		logger.Info("Received resharing success message", "raw", string(msg))
+		logger.Debug("Received resharing response", "raw", string(msg))
 		var event types.ResharingResponse
 		err := json.Unmarshal(msg, &event)
 		if err != nil {
 			logger.Error("Failed to unmarshal resharing success event", err, "raw", string(msg))
 			return err
 		}
-		logger.Info("Deserialized resharing success event", "event", event)
+		logger.Debug("Deserialized resharing response", "event", event)
 		callback(event)
 		return nil
 	})

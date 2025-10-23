@@ -27,7 +27,11 @@ func main() {
 	if algorithm == "" {
 		algorithm = string(types.EventInitiatorKeyTypeEd25519)
 	}
-	walletID := "2aafaa33-8a79-438e-a5d4-1d11f4598a40"
+	walletID := "f7260d50-4a3c-4748-b507-8cd5422ef85f"
+	nodeIDs := []string{
+		"59271e38-e8cd-458c-86e8-5a05be9da515",
+		"905646c8-bdd4-4318-b603-84b30844b1a5",
+	}
 	// Validate algorithm
 	if !slices.Contains(
 		[]string{
@@ -87,10 +91,7 @@ func main() {
 	resharingMsg := &types.ResharingMessage{
 		SessionID: uuid.NewString(),
 		WalletID:  walletID,
-		NodeIDs: []string{
-			"FD97D371-4C75-4F59-9159-759F4C71543C",
-			"504ACBA3-0958-4E10-B6E6-6B274579BF6A",
-		}, // new peer IDs
+		NodeIDs:   nodeIDs, // new peer IDs
 
 		NewThreshold: 1, // t+1 <= len(NodeIDs)
 		KeyType:      types.KeyTypeEd25519,
