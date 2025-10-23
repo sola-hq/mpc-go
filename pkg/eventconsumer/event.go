@@ -372,6 +372,11 @@ func (ec *eventConsumer) handleSigningEvent(natMsg *nats.Msg) {
 		return
 	}
 
+	// Handle ReplyTo header for synchronous responses
+	if replyTo := natMsg.Header.Get("ReplyTo"); replyTo != "" {
+		natMsg.Reply = replyTo
+	}
+
 	err = ec.identityStore.VerifyInitiatorMessage(&msg)
 	if err != nil {
 		logger.Error("Failed to verify initiator message", err)
@@ -507,7 +512,19 @@ func (ec *eventConsumer) handleSigningEvent(natMsg *nats.Msg) {
 
 	onSuccess := func(data []byte) {
 		done()
-		ec.sendReplyToRemoveMsg(natMsg)
+		logger.Info("Signing success callback called", "reply", natMsg.Reply, "dataLength", len(data))
+		// Send the actual signing result instead of the original request
+		if natMsg.Reply != "" {
+			err := ec.pubsub.Publish(natMsg.Reply, data)
+			if err != nil {
+				logger.Error("Failed to reply with signing result", err, "reply", natMsg.Reply)
+			} else {
+				logger.Info("Successfully sent signing result to reply inbox")
+			}
+		} else {
+			logger.Warn("No reply inbox, using fallback")
+			ec.sendReplyToRemoveMsg(natMsg)
+		}
 	}
 	go session.Sign(onSuccess)
 }
@@ -536,6 +553,7 @@ func (ec *eventConsumer) handleSigningSessionError(walletID, txID string, err er
 		"error", err.Error(),
 		"errorCode", errorCode,
 		"context", contextMsg,
+		"reply", natMsg.Reply,
 	)
 
 	signingResult := types.SigningResponse{
@@ -569,6 +587,8 @@ func (ec *eventConsumer) handleSigningSessionError(walletID, txID string, err er
 func (ec *eventConsumer) sendReplyToRemoveMsg(natMsg *nats.Msg) {
 	msg := natMsg.Data
 
+	logger.Info("sendReplyToRemoveMsg called", "reply", natMsg.Reply, "dataLength", len(msg))
+
 	if natMsg.Reply == "" {
 		logger.Warn("No reply inbox specified for sign success message", "msg", string(msg))
 		return
@@ -579,6 +599,7 @@ func (ec *eventConsumer) sendReplyToRemoveMsg(natMsg *nats.Msg) {
 		logger.Error("Failed to reply message", err, "reply", natMsg.Reply)
 		return
 	}
+	logger.Info("Successfully sent reply via sendReplyToRemoveMsg")
 }
 
 func (ec *eventConsumer) consumeResharingEvent() error {

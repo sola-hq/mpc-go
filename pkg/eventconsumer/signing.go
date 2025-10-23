@@ -158,8 +158,14 @@ func (sc *signingConsumer) handleSigningEvent(msg jetstream.Msg) {
 		_ = msg.Ack()
 		return
 	}
-	// Create a reply inbox to receive the signing event response.
-	replyInbox := nats.NewInbox()
+
+	// Check for ReplyTo header for synchronous responses
+	replyInbox := msg.Headers().Get("ReplyTo")
+	if replyInbox == "" {
+		// Create a reply inbox to receive the signing event response.
+		replyInbox = nats.NewInbox()
+		logger.Debug("No ReplyTo header, using new inbox", "inbox", replyInbox)
+	}
 
 	// Use a synchronous subscription for the reply inbox.
 	replySub, err := sc.natsConn.SubscribeSync(replyInbox)
@@ -177,6 +183,11 @@ func (sc *signingConsumer) handleSigningEvent(msg jetstream.Msg) {
 	// Publish the signing event with the reply inbox.
 	headers := map[string]string{
 		"SessionID": uuid.New().String(),
+	}
+	// Pass through the ReplyTo header if it exists
+	if originalReplyTo := msg.Headers().Get("ReplyTo"); originalReplyTo != "" {
+		headers["ReplyTo"] = originalReplyTo
+		logger.Info("Passing through ReplyTo header", "originalReplyTo", originalReplyTo, "newReplyInbox", replyInbox)
 	}
 	if err := sc.pubsub.PublishWithReply(MPCSignEvent, replyInbox, msg.Data(), headers); err != nil {
 		logger.Error("SigningConsumer: Failed to publish signing event with reply", err)
@@ -206,6 +217,7 @@ func (sc *signingConsumer) handleSigningEvent(msg jetstream.Msg) {
 			}
 			if replyMsg != nil {
 				logger.Info("SigningConsumer: Completed signing event; reply received")
+				// Don't send ACK to the reply inbox, just acknowledge the JetStream message
 				if ackErr := msg.Ack(); ackErr != nil {
 					logger.Error("SigningConsumer: ACK failed", ackErr)
 				}

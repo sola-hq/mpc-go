@@ -67,11 +67,80 @@ func main() {
 		NatsConn: natsConn,
 		Signer:   localSigner,
 	})
+	startTime := time.Now()
+	signingDone := make(chan bool, 1)
 
-	// 2) Once wallet exists, immediately fire a SignTransaction
+	// testSync(mpcClient, walletID)
+
+	testAsync(mpcClient, walletID, signingDone)
+
+	stop := make(chan os.Signal, 1)
+	signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM)
+
+	select {
+	case <-signingDone:
+		// Calculate total duration
+		totalDuration := time.Since(startTime)
+		fmt.Printf("Signing completed cost %s (%dms)\n",
+			totalDuration.String(), totalDuration.Milliseconds())
+		fmt.Println("Shutting down.")
+	case <-stop:
+		fmt.Println("Received interrupt signal. Shutting down.")
+	}
+}
+
+// func testSync(mpcClient types.Initiator, walletID string, signingDone chan bool) {
+// 	// 2) Once wallet exists, immediately fire a SignTransactionAndWait
+// 	txID := uuid.New().String()
+// 	dummyTx := []byte("deadbeef") // replace with real transaction bytes
+
+// 	// Record signing start time
+// 	startTime := time.Now()
+// 	txMsg := &types.SigningMessage{
+// 		KeyType:  types.KeyTypeSecp256k1,
+// 		WalletID: walletID,
+// 		TxID:     txID,
+// 		Tx:       dummyTx,
+// 	}
+
+// 	fmt.Printf("SignTransactionAndWait(%q) starting...\n", txID)
+
+// 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+// 	defer cancel()
+
+// 	response, err := mpcClient.SignTransactionSync(ctx, txMsg)
+// 	if err != nil {
+// 		logger.Fatal("SignTransactionAndWait failed", err)
+// 	}
+
+// 	// Calculate signing duration
+// 	duration := time.Since(startTime)
+
+// 	if response.TxID != txID {
+// 		logger.Error("Unexpected txID", fmt.Errorf("expected: %s, got: %s", txID, response.TxID))
+// 	}
+
+// 	logger.Info("Signing result received",
+// 		"txID", response.TxID,
+// 		"err_code", response.ErrorCode,
+// 		"err_reason", response.ErrorReason,
+// 		"r", hex.EncodeToString(response.R),
+// 		"s", hex.EncodeToString(response.S),
+// 		"signature_recovery", hex.EncodeToString(response.SignatureRecovery),
+// 		"signature", hex.EncodeToString(response.Signature),
+// 		"duration(s)", fmt.Sprintf("%.3f", duration.Seconds()),
+// 		"duration(ms)", duration.Milliseconds(),
+// 	)
+
+// 	// Calculate total duration
+// 	totalDuration := time.Since(startTime)
+// 	fmt.Printf("Signing completed cost %s (%dms)\n",
+// 		totalDuration.String(), totalDuration.Milliseconds())
+// }
+
+func testAsync(mpcClient types.Initiator, walletID string, signingDone chan bool) {
 	txID := uuid.New().String()
 	dummyTx := []byte("deadbeef") // replace with real transaction bytes
-	signingDone := make(chan bool, 1)
 
 	// Record signing start time
 	startTime := time.Now()
@@ -81,46 +150,40 @@ func main() {
 		TxID:     txID,
 		Tx:       dummyTx,
 	}
-	err = mpcClient.SignTransaction(txMsg)
-	if err != nil {
-		logger.Fatal("SignTransaction failed", err)
-	}
-	fmt.Printf("SignTransaction(%q) sent, awaiting result...\n", txID)
 
-	// 3) Listen for signing results
-	err = mpcClient.OnSignResult(func(response types.SigningResponse) {
-		// Calculate signing duration
-		duration := time.Since(startTime)
+	fmt.Printf("SignTransaction(%q) starting...\n", txID)
 
+	// 3) Listen for signing results first
+	err := mpcClient.OnSignResult(func(response types.SigningResponse) {
+		// Only process the response for our specific txID
+		if response.TxID != txID {
+			logger.Debug("Ignoring signing result for different txID",
+				"expected", txID,
+				"received", response.TxID)
+			return
+		}
+
+		totalDuration := time.Since(startTime)
+		fmt.Printf("Signing completed cost %dms\n",
+			totalDuration.Milliseconds())
 		logger.Info("Signing result received",
 			"txID", response.TxID,
 			"err_code", response.ErrorCode,
 			"err_reason", response.ErrorReason,
-			"r", hex.EncodeToString(response.R),
-			"s", hex.EncodeToString(response.S),
-			"signature_recovery", hex.EncodeToString(response.SignatureRecovery),
-			"signature", hex.EncodeToString(response.Signature),
-			"duration(s)", fmt.Sprintf("%.3f", duration.Seconds()),
-			"duration(ms)", duration.Milliseconds(),
+			"r", hex.EncodeToString(response.R), "s", hex.EncodeToString(response.S),
+			"signature_recovery", hex.EncodeToString(response.SignatureRecovery), "signature", hex.EncodeToString(response.Signature),
 		)
-		// Notify main program to exit
+
 		signingDone <- true
 	})
 	if err != nil {
 		logger.Fatal("Failed to subscribe to OnSignResult", err)
 	}
 
-	// Wait for syscall signal
-	stop := make(chan os.Signal, 1)
-	signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM)
-
-	select {
-	case <-signingDone:
-		// Calculate total duration
-		totalDuration := time.Since(startTime)
-		fmt.Printf("Signing completed cost %s (%dms)",
-			totalDuration.String(), totalDuration.Milliseconds())
-	case <-stop:
-		fmt.Println("Received interrupt signal. Shutting down.")
+	// Send signing request
+	err = mpcClient.SignTransaction(txMsg)
+	if err != nil {
+		logger.Fatal("SignTransaction failed", err)
 	}
+	fmt.Printf("SignTransaction(%q) sent, awaiting result...\n", txID)
 }

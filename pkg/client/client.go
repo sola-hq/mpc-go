@@ -17,6 +17,8 @@ type initiator struct {
 	signingBroker   messaging.MessageBroker
 	keygenBroker    messaging.MessageBroker
 	resharingBroker messaging.MessageBroker
+	pubsub          messaging.PubSub
+	natsConn        *nats.Conn
 
 	keygenResultQueue    messaging.MessageQueue
 	signingResultQueue   messaging.MessageQueue
@@ -84,10 +86,15 @@ func NewMPCClient(opts Options) types.Initiator {
 	signingResultQueue := messageQueueMgr.NewMessageQueue(constant.SigningResultQueueName)
 	resharingResultQueue := messageQueueMgr.NewMessageQueue(constant.ResharingResultQueueName)
 
+	// Create pubsub for direct NATS communication
+	pubsub := messaging.NewNATSPubSub(opts.NatsConn)
+
 	return &initiator{
 		signingBroker:   signingBroker,
 		keygenBroker:    keygenBroker,
 		resharingBroker: resharingBroker,
+		pubsub:          pubsub,
+		natsConn:        opts.NatsConn,
 
 		keygenResultQueue:    keygenResultQueue,
 		signingResultQueue:   signingResultQueue,
@@ -186,6 +193,66 @@ func (c *initiator) OnSignResult(callback func(event types.SigningResponse)) err
 	}
 
 	return nil
+}
+
+// SignTransactionSync signs a transaction and waits for the result synchronously
+func (c *initiator) SignTransactionSync(ctx context.Context, msg *types.SigningMessage) (*types.SigningResponse, error) {
+	// compute the canonical raw bytes (omitting Signature field)
+	raw, err := msg.Raw()
+	if err != nil {
+		return nil, fmt.Errorf("SignTransaction: raw payload error: %w", err)
+	}
+	signature, err := c.signer.Sign(raw)
+	if err != nil {
+		return nil, fmt.Errorf("SignTransaction: failed to sign message: %w", err)
+	}
+	msg.Signature = signature
+
+	bytes, err := json.Marshal(msg)
+	if err != nil {
+		return nil, fmt.Errorf("SignTransaction: marshal error: %w", err)
+	}
+
+	// Create a unique inbox for the reply
+	replyInbox := nats.NewInbox()
+	sub, err := c.natsConn.SubscribeSync(replyInbox)
+	if err != nil {
+		return nil, fmt.Errorf("SignTransactionSync: failed to subscribe to reply inbox: %w", err)
+	}
+	defer sub.Unsubscribe()
+
+	// Publish the request with the ReplyTo header
+	topic := constant.FormatSigningRequestTopic(msg.TxID)
+	headers := map[string]string{
+		"ReplyTo": replyInbox,
+	}
+	logger.Info("Publishing signing request", "topic", topic, "replyInbox", replyInbox, "headers", headers)
+	if err := c.pubsub.PublishWithReply(topic, replyInbox, bytes, headers); err != nil {
+		return nil, fmt.Errorf("SignTransactionSync: publish error: %w", err)
+	}
+
+	// Wait for the response
+	logger.Info("Waiting for reply on inbox", "inbox", replyInbox)
+	for {
+		reply, err := sub.NextMsgWithContext(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("SignTransactionSync: failed to receive reply: %w", err)
+		}
+
+		var response types.SigningResponse
+		if err := json.Unmarshal(reply.Data, &response); err != nil {
+			// This is likely the JS ack, log it and continue waiting
+			logger.Warn("SignTransactionSync: failed to unmarshal reply, possibly a JS ack, ignoring.", "error", err, "data", string(reply.Data))
+			continue
+		}
+
+		// Check if the response is valid
+		if response.TxID == "" {
+			logger.Info("SignTransactionSync: received a reply with empty TxID, ignoring.", "data", string(reply.Data))
+			continue
+		}
+		return &response, nil
+	}
 }
 
 func (c *initiator) Resharing(msg *types.ResharingMessage) error {

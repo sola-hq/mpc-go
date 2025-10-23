@@ -1,6 +1,7 @@
 package types
 
 import (
+	"context"
 	"encoding/json"
 )
 
@@ -24,6 +25,7 @@ type Initiator interface {
 
 	SignTransaction(msg *SigningMessage) error
 	OnSignResult(callback func(event SigningResponse)) error
+	SignTransactionSync(ctx context.Context, msg *SigningMessage) (*SigningResponse, error)
 
 	Resharing(msg *ResharingMessage) error
 	OnResharingResult(callback func(result ResharingResponse)) error
