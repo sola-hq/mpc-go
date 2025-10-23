@@ -14,10 +14,10 @@ import (
 )
 
 type initiator struct {
-	signingBroker        messaging.MessageBroker
-	keygenBroker         messaging.MessageBroker
-	resharingBroker      messaging.MessageBroker
-	pubsub               messaging.PubSub
+	signingBroker   messaging.MessageBroker
+	keygenBroker    messaging.MessageBroker
+	resharingBroker messaging.MessageBroker
+
 	keygenResultQueue    messaging.MessageQueue
 	signingResultQueue   messaging.MessageQueue
 	resharingResultQueue messaging.MessageQueue
@@ -72,8 +72,6 @@ func NewMPCClient(opts Options) types.Initiator {
 		logger.Fatal("Failed to create resharing jetstream broker", err)
 	}
 
-	pubsub := messaging.NewNATSPubSub(opts.NatsConn)
-
 	subjects := []string{
 		constant.KeygenResultTopic,
 		constant.SigningResultTopic,
@@ -87,14 +85,15 @@ func NewMPCClient(opts Options) types.Initiator {
 	resharingResultQueue := messageQueueMgr.NewMessageQueue(constant.ResharingResultQueueName)
 
 	return &initiator{
-		signingBroker:        signingBroker,
-		keygenBroker:         keygenBroker,
-		resharingBroker:      resharingBroker,
-		pubsub:               pubsub,
+		signingBroker:   signingBroker,
+		keygenBroker:    keygenBroker,
+		resharingBroker: resharingBroker,
+
 		keygenResultQueue:    keygenResultQueue,
 		signingResultQueue:   signingResultQueue,
 		resharingResultQueue: resharingResultQueue,
-		signer:               opts.Signer,
+
+		signer: opts.Signer,
 	}
 }
 
