@@ -35,10 +35,10 @@ type KeygenConsumer interface {
 
 // keygenConsumer implements KeygenConsumer.
 type keygenConsumer struct {
+	peerRegistry      mpc.PeerRegistry
 	natsConn          *nats.Conn
 	pubsub            messaging.PubSub
 	jsBroker          messaging.MessageBroker
-	peerRegistry      mpc.PeerRegistry
 	keygenResultQueue messaging.MessageQueue
 
 	// jsSub holds the JetStream subscription, so it can be cleaned up during Close().

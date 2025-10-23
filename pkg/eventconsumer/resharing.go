@@ -31,10 +31,10 @@ type ResharingConsumer interface {
 
 // resharingConsumer implements ResharingConsumer.
 type resharingConsumer struct {
+	peerRegistry         mpc.PeerRegistry
 	natsConn             *nats.Conn
 	pubsub               messaging.PubSub
 	jsBroker             messaging.MessageBroker
-	peerRegistry         mpc.PeerRegistry
 	resharingResultQueue messaging.MessageQueue
 
 	jsSub messaging.Subscription

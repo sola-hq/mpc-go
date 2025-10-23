@@ -36,11 +36,11 @@ type SigningConsumer interface {
 
 // signingConsumer implements SigningConsumer.
 type signingConsumer struct {
+	threshold          int
+	peerRegistry       mpc.PeerRegistry
 	natsConn           *nats.Conn
 	pubsub             messaging.PubSub
 	jsBroker           messaging.MessageBroker
-	peerRegistry       mpc.PeerRegistry
-	threshold          int
 	signingResultQueue messaging.MessageQueue
 
 	// jsSub holds the JetStream subscription, so it can be cleaned up during Close().
