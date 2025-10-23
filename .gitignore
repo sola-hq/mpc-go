@@ -31,6 +31,10 @@ go.work.sum
 # .idea/
 # .vscode/
 
+# Log files
+*.log
+*.json
+
 db/
 tmp/
 bin/
