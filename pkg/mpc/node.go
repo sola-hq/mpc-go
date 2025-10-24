@@ -2,13 +2,13 @@ package mpc
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"slices"
 	"time"
 
 	"github.com/bnb-chain/tss-lib/v2/ecdsa/keygen"
 	"github.com/bnb-chain/tss-lib/v2/tss"
-	"github.com/fystack/mpcium/pkg/common/errors"
 	"github.com/fystack/mpcium/pkg/identity"
 	"github.com/fystack/mpcium/pkg/keyinfo"
 	"github.com/fystack/mpcium/pkg/kvstore"

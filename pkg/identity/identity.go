@@ -18,9 +18,9 @@ import (
 	"github.com/bnb-chain/tss-lib/v2/tss"
 	"golang.org/x/term"
 
-	"github.com/fystack/mpcium/pkg/common/pathutil"
 	"github.com/fystack/mpcium/pkg/config"
 	"github.com/fystack/mpcium/pkg/encryption"
+	"github.com/fystack/mpcium/pkg/filesystem"
 	"github.com/fystack/mpcium/pkg/logger"
 	"github.com/fystack/mpcium/pkg/security"
 	"github.com/fystack/mpcium/pkg/types"
@@ -119,7 +119,7 @@ func NewFileStore(identityDir, nodeName string, decrypt bool, agePasswordFile st
 	// Check that each node in peers.json has an identity file
 	for nodeName, nodeID := range peers {
 		identityFileName := fmt.Sprintf("%s_identity.json", nodeName)
-		identityFilePath, err := pathutil.SafePath(identityDir, identityFileName)
+		identityFilePath, err := filesystem.SafePath(identityDir, identityFileName)
 		if err != nil {
 			return nil, fmt.Errorf("invalid identity file path for node %s: %w", nodeName, err)
 		}
@@ -255,12 +255,12 @@ func loadPrivateKey(identityDir, nodeName string, decrypt bool, agePasswordFile 
 	encryptedKeyFileName := fmt.Sprintf("%s_private.key.age", nodeName)
 	unencryptedKeyFileName := fmt.Sprintf("%s_private.key", nodeName)
 
-	encryptedKeyPath, err := pathutil.SafePath(identityDir, encryptedKeyFileName)
+	encryptedKeyPath, err := filesystem.SafePath(identityDir, encryptedKeyFileName)
 	if err != nil {
 		return "", fmt.Errorf("invalid encrypted key path for node %s: %w", nodeName, err)
 	}
 
-	unencryptedKeyPath, err := pathutil.SafePath(identityDir, unencryptedKeyFileName)
+	unencryptedKeyPath, err := filesystem.SafePath(identityDir, unencryptedKeyFileName)
 	if err != nil {
 		return "", fmt.Errorf("invalid unencrypted key path for node %s: %w", nodeName, err)
 	}

@@ -1,11 +1,12 @@
 package ecdsa
 
 import (
+	"errors"
+
 	"github.com/bnb-chain/tss-lib/v2/ecdsa/keygen"
 	"github.com/bnb-chain/tss-lib/v2/ecdsa/resharing"
 	"github.com/bnb-chain/tss-lib/v2/ecdsa/signing"
 	"github.com/bnb-chain/tss-lib/v2/tss"
-	"github.com/fystack/mpcium/pkg/common/errors"
 	"github.com/fystack/mpcium/pkg/mpc/core"
 )
 

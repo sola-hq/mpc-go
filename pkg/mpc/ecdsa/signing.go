@@ -3,6 +3,7 @@ package ecdsa
 import (
 	"crypto/ecdsa"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math/big"
 
@@ -10,7 +11,6 @@ import (
 	"github.com/bnb-chain/tss-lib/v2/ecdsa/keygen"
 	"github.com/bnb-chain/tss-lib/v2/ecdsa/signing"
 	"github.com/bnb-chain/tss-lib/v2/tss"
-	"github.com/fystack/mpcium/pkg/common/errors"
 	"github.com/fystack/mpcium/pkg/constant"
 	"github.com/fystack/mpcium/pkg/identity"
 	"github.com/fystack/mpcium/pkg/keyinfo"
@@ -90,7 +90,7 @@ func (s *ecdsaSigningSession) Init(tx *big.Int) error {
 
 	keyInfo, err := s.KeyinfoStore.Get(s.ComposeKey(s.WalletID))
 	if err != nil {
-		return errors.Wrap(err, "Failed to get key info data")
+		return fmt.Errorf("Failed to get key info data: %w", err)
 	}
 
 	if len(s.ParticipantPeerIDs) < keyInfo.Threshold+1 {
@@ -112,13 +112,13 @@ func (s *ecdsaSigningSession) Init(tx *big.Int) error {
 
 	keyData, err := s.Kvstore.Get(s.ComposeKey(core.WalletIDWithVersion(s.WalletID, keyInfo.Version)))
 	if err != nil {
-		return errors.Wrap(err, "Failed to get wallet data from KVStore")
+		return fmt.Errorf("Failed to get wallet data from KVStore: %w", err)
 	}
 	// Check if all the participants of the key are present
 	var data keygen.LocalPartySaveData
 	err = json.Unmarshal(keyData, &data)
 	if err != nil {
-		return errors.Wrap(err, "Failed to unmarshal wallet data")
+		return fmt.Errorf("Failed to unmarshal wallet data: %w", err)
 	}
 
 	s.Party = signing.NewLocalParty(tx, params, data, s.OutCh, s.endCh)
@@ -166,7 +166,7 @@ func (s *ecdsaSigningSession) Sign(onSuccess func(data []byte)) {
 
 			bytes, err := json.Marshal(r)
 			if err != nil {
-				s.ErrCh <- errors.Wrap(err, "Failed to marshal raw signature")
+				s.ErrCh <- fmt.Errorf("Failed to marshal raw signature: %w", err)
 				return
 			}
 
@@ -174,7 +174,7 @@ func (s *ecdsaSigningSession) Sign(onSuccess func(data []byte)) {
 				IdempotentKey: s.IdempotentKey,
 			})
 			if err != nil {
-				s.ErrCh <- errors.Wrap(err, "Failed to publish sign success message")
+				s.ErrCh <- fmt.Errorf("Failed to publish sign success message: %w", err)
 
 				return
 			}

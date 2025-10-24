@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/fystack/mpcium/pkg/common/pathutil"
 	"github.com/fystack/mpcium/pkg/config"
+	"github.com/fystack/mpcium/pkg/filesystem"
 	"github.com/fystack/mpcium/pkg/infra"
 	"github.com/fystack/mpcium/pkg/logger"
 	"github.com/hashicorp/consul/api"
@@ -44,7 +44,7 @@ func registerPeers(cmd *cobra.Command, args []string) error {
 	prefix := "mpc_peers/"
 
 	// Validate the input file path for security
-	if err := pathutil.ValidateFilePath(registerPeersPath); err != nil {
+	if err := filesystem.ValidateFilePath(registerPeersPath); err != nil {
 		return fmt.Errorf("invalid input file path: %w", err)
 	}
 

@@ -13,7 +13,7 @@ import (
 
 	"filippo.io/age"
 	"github.com/fystack/mpcium/cmd/cli/utils"
-	"github.com/fystack/mpcium/pkg/common/pathutil"
+	"github.com/fystack/mpcium/pkg/filesystem"
 	"github.com/spf13/cobra"
 )
 
@@ -79,7 +79,7 @@ func runGenerateIdentity(cmd *cobra.Command, args []string) error {
 	}
 
 	// Validate the peers file path for security
-	if err := pathutil.ValidateFilePath(peersPath); err != nil {
+	if err := filesystem.ValidateFilePath(peersPath); err != nil {
 		return fmt.Errorf("invalid peers file path: %w", err)
 	}
 
@@ -160,7 +160,7 @@ func generateNodeIdentity(nodeName, nodeID, identityDir string, encrypt bool, pa
 		}
 
 		// Validate the encrypted key path for security
-		if err := pathutil.ValidateFilePath(encryptedKeyPath); err != nil {
+		if err := filesystem.ValidateFilePath(encryptedKeyPath); err != nil {
 			return fmt.Errorf("invalid encrypted key file path: %w", err)
 		}
 

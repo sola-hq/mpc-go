@@ -12,8 +12,8 @@ import (
 
 	"filippo.io/age"
 	"github.com/fystack/mpcium/cmd/cli/utils"
-	"github.com/fystack/mpcium/pkg/common/pathutil"
 	"github.com/fystack/mpcium/pkg/encryption"
+	"github.com/fystack/mpcium/pkg/filesystem"
 	"github.com/fystack/mpcium/pkg/types"
 	"github.com/spf13/cobra"
 )
@@ -168,7 +168,7 @@ func runGenerateInitiatorIdentity(cmd *cobra.Command, args []string) error {
 		encKeyPath := keyPath + ".age"
 
 		// Validate the encrypted key path for security
-		if err := pathutil.ValidateFilePath(encKeyPath); err != nil {
+		if err := filesystem.ValidateFilePath(encKeyPath); err != nil {
 			return fmt.Errorf("invalid encrypted key file path: %w", err)
 		}
 

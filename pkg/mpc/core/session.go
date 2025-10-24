@@ -2,6 +2,7 @@ package core
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math/big"
 	"strings"
@@ -9,7 +10,6 @@ import (
 
 	"github.com/bnb-chain/tss-lib/v2/ecdsa/keygen"
 	"github.com/bnb-chain/tss-lib/v2/tss"
-	"github.com/fystack/mpcium/pkg/common/errors"
 	"github.com/fystack/mpcium/pkg/identity"
 	"github.com/fystack/mpcium/pkg/keyinfo"
 	"github.com/fystack/mpcium/pkg/kvstore"
@@ -254,7 +254,7 @@ func (s *PartySession) receiveTssMessage(msg *types.TssMessage) {
 
 	round, err := s.GetRoundFunc(msg.MsgBytes, s.SelfPartyID, msg.IsBroadcast)
 	if err != nil {
-		s.ErrCh <- errors.Wrap(err, "Broken TSS Share")
+		s.ErrCh <- fmt.Errorf("Broken TSS Share: %w", err)
 		return
 	}
 	logger.Debug(
