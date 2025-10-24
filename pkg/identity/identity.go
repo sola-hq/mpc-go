@@ -19,12 +19,11 @@ import (
 	"golang.org/x/term"
 
 	"github.com/fystack/mpcium/pkg/common/pathutil"
+	"github.com/fystack/mpcium/pkg/config"
 	"github.com/fystack/mpcium/pkg/encryption"
 	"github.com/fystack/mpcium/pkg/logger"
 	"github.com/fystack/mpcium/pkg/security"
 	"github.com/fystack/mpcium/pkg/types"
-
-	"github.com/spf13/viper"
 )
 
 // NodeIdentity represents a node's identity information
@@ -163,7 +162,7 @@ func NewFileStore(identityDir, nodeName string, decrypt bool, agePasswordFile st
 
 func loadInitiatorKeys() (*InitiatorKey, error) {
 	// Get algorithm configuration with default
-	algorithm := viper.GetString("event_initiator_algorithm")
+	algorithm := config.EventInitiatorAlgorithm()
 	if algorithm == "" {
 		algorithm = string(types.KeyTypeEd25519)
 	}
@@ -211,7 +210,7 @@ func loadInitiatorKeys() (*InitiatorKey, error) {
 
 // loadEd25519InitiatorKey loads Ed25519 initiator public key
 func loadEd25519InitiatorKey() ([]byte, error) {
-	pubKeyHex := viper.GetString("event_initiator_pubkey")
+	pubKeyHex := config.EventInitiatorPubKey()
 	if pubKeyHex == "" {
 		return nil, fmt.Errorf("event_initiator_pubkey not found in config")
 	}
@@ -227,7 +226,7 @@ func loadEd25519InitiatorKey() ([]byte, error) {
 }
 
 func loadP256InitiatorKey() (*ecdsa.PublicKey, error) {
-	pubKeyHex := viper.GetString("event_initiator_pubkey")
+	pubKeyHex := config.EventInitiatorPubKey()
 	if pubKeyHex == "" {
 		return nil, fmt.Errorf("event_initiator_pubkey not found in config")
 	}

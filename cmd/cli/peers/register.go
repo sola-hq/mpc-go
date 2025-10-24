@@ -73,8 +73,9 @@ func registerPeers(cmd *cobra.Command, args []string) error {
 	}
 
 	// Initialize config and logger
-	// Note: configFile is not available in this package, using empty string for default
-	config.InitViperConfig("")
+	if _, err := config.Load(); err != nil {
+		return fmt.Errorf("load config: %w", err)
+	}
 	logger.Init(registerEnvironment, true)
 
 	// Connect to Consul

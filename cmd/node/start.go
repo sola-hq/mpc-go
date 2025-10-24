@@ -18,7 +18,6 @@ import (
 	"github.com/fystack/mpcium/pkg/messaging"
 	"github.com/fystack/mpcium/pkg/mpc"
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 )
 
 // NewStartCmd creates a new start command
@@ -53,39 +52,42 @@ func runNode(cmd *cobra.Command, args []string) error {
 
 	ctx := context.Background()
 
-	viper.SetDefault("backup_enabled", true)
-	config.InitViperConfig(configPath)
+	if configPath != "" {
+		config.SetEnvConfigPath(configPath)
+	}
 
-	appConfig := config.LoadConfig()
-	environment := appConfig.Environment
-	logger.Init(environment, debug)
+	cfg, err := config.Load()
+	if err != nil {
+		return fmt.Errorf("load config: %w", err)
+	}
+	logger.Init(cfg.Environment, debug)
 
 	// Handle password file if provided
 	if passwordFile != "" {
-		if err := loadPasswordFromFile(passwordFile); err != nil {
+		if err := loadPasswordFromFile(cfg, passwordFile); err != nil {
 			return fmt.Errorf("failed to load password from file: %w", err)
 		}
 	}
 	// Handle configuration based on prompt flag
 	if usePrompts {
-		promptForSensitiveCredentials()
+		promptForSensitiveCredentials(cfg)
 	} else {
 		// Validate the config values
-		checkRequiredConfigValues(appConfig)
+		checkRequiredConfigValues(cfg)
 	}
 
-	consulClient := infra.GetConsulClient(environment)
+	consulClient := infra.GetConsulClient(cfg.Environment)
 	keyinfoStore := keyinfo.NewStore(consulClient.KV())
 	peers := LoadPeersFromConsul(consulClient)
 	nodeID := GetIDFromName(nodeName, peers)
 
-	badgerKV := NewBadgerKV(nodeName, nodeID, appConfig)
+	badgerKV := NewBadgerKV(nodeName, nodeID)
 	defer badgerKV.Close()
 
 	// Start background backup job
-	backupEnabled := viper.GetBool("backup_enabled")
+	backupEnabled := cfg.BackupEnabled
 	if backupEnabled {
-		backupPeriodSeconds := viper.GetInt("backup_period_seconds")
+		backupPeriodSeconds := cfg.BackupPeriodSeconds
 		stopBackup := StartPeriodicBackup(ctx, badgerKV, backupPeriodSeconds)
 		defer stopBackup()
 	}
@@ -95,7 +97,7 @@ func runNode(cmd *cobra.Command, args []string) error {
 		logger.Fatal("Failed to create identity store", err)
 	}
 
-	natsConn, err := messaging.GetNATSConnection(environment, appConfig.NATs)
+	natsConn, err := messaging.GetNATSConnection()
 	if err != nil {
 		logger.Fatal("Failed to connect to NATS", err)
 	}

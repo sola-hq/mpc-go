@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/fystack/mpcium/pkg/config"
 	"github.com/fystack/mpcium/pkg/constant"
 	"github.com/fystack/mpcium/pkg/identity"
 	"github.com/fystack/mpcium/pkg/logger"
@@ -19,7 +20,6 @@ import (
 	"github.com/fystack/mpcium/pkg/session"
 	"github.com/fystack/mpcium/pkg/types"
 	"github.com/nats-io/nats.go"
-	"github.com/spf13/viper"
 )
 
 const (
@@ -74,23 +74,23 @@ func NewEventConsumer(
 	resharingResultQueue messaging.MessageQueue,
 	identityStore identity.Store,
 ) EventConsumer {
-	threshold := viper.GetInt("threshold")
-	maxConcurrentKeygen := viper.GetInt("max_concurrent_keygen")
+	threshold := config.Threshold()
+	maxConcurrentKeygen := config.MaxConcurrentKeygen()
 	if maxConcurrentKeygen == 0 {
 		maxConcurrentKeygen = DefaultConcurrentKeygen
 	}
 
-	maxConcurrentSigning := viper.GetInt("max_concurrent_signing")
+	maxConcurrentSigning := config.MaxConcurrentSigning()
 	if maxConcurrentSigning == 0 {
 		maxConcurrentSigning = DefaultConcurrentSigning
 	}
 
-	maxConcurrentResharing := viper.GetInt("max_concurrent_resharing")
+	maxConcurrentResharing := config.MaxConcurrentResharing()
 	if maxConcurrentResharing == 0 {
 		maxConcurrentResharing = DefaultConcurrentResharing
 	}
 
-	sessionWarmUpDelayMs := viper.GetInt("session_warm_up_delay_ms")
+	sessionWarmUpDelayMs := config.SessionWarmUpDelayMillis()
 	if sessionWarmUpDelayMs == 0 {
 		sessionWarmUpDelayMs = DefaultSessionWarmUpDelay
 	}

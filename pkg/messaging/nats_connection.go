@@ -11,8 +11,11 @@ import (
 )
 
 // GetNATSConnection creates a NATS connection with proper TLS configuration
-func GetNATSConnection(environment string, config *config.NATsConfig) (*nats.Conn, error) {
-	url := config.URL
+func GetNATSConnection() (*nats.Conn, error) {
+	cfg := config.GetConfig()
+	environment := cfg.Environment
+
+	url := cfg.NATs.URL
 	opts := []nats.Option{
 		nats.MaxReconnects(-1), // retry forever
 		nats.ReconnectWait(2 * time.Second),
@@ -30,10 +33,10 @@ func GetNATSConnection(environment string, config *config.NATsConfig) (*nats.Con
 	if environment == constant.EnvProduction {
 		// Load TLS config from configuration
 		var clientCert, clientKey, caCert string
-		if config.TLS != nil {
-			clientCert = config.TLS.ClientCert
-			clientKey = config.TLS.ClientKey
-			caCert = config.TLS.CACert
+		if cfg.NATs.TLS != nil {
+			clientCert = cfg.NATs.TLS.ClientCert
+			clientKey = cfg.NATs.TLS.ClientKey
+			caCert = cfg.NATs.TLS.CACert
 		}
 
 		// Fallback to default paths if not configured
@@ -50,7 +53,7 @@ func GetNATSConnection(environment string, config *config.NATsConfig) (*nats.Con
 		opts = append(opts,
 			nats.ClientCert(clientCert, clientKey),
 			nats.RootCAs(caCert),
-			nats.UserInfo(config.Username, config.Password),
+			nats.UserInfo(cfg.NATs.Username, cfg.NATs.Password),
 		)
 	}
 

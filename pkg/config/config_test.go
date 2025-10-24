@@ -1,73 +1,11 @@
 package config
 
 import (
-	"strings"
+	"os"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 )
-
-func TestAppConfig_MarshalJSONMask(t *testing.T) {
-	config := AppConfig{
-		Consul: &ConsulConfig{
-			Address:  "localhost:8500",
-			Username: "admin",
-			Password: "secret123",
-			Token:    "token456",
-		},
-		NATs: &NATsConfig{
-			URL:      "nats://localhost:4222",
-			Username: "nats_user",
-			Password: "nats_pass",
-		},
-		BadgerPassword: "badger_secret",
-	}
-
-	masked := config.MarshalJSONMask()
-
-	// Verify that sensitive data is masked
-	assert.Contains(t, masked, "localhost:8500")        // Address should not be masked
-	assert.Contains(t, masked, "admin")                 // Username should not be masked
-	assert.Contains(t, masked, "nats_user")             // Username should not be masked
-	assert.Contains(t, masked, "nats://localhost:4222") // URL should not be masked
-
-	// Verify that passwords are masked
-	assert.NotContains(t, masked, "secret123")
-	assert.NotContains(t, masked, "token456")
-	assert.NotContains(t, masked, "nats_pass")
-	assert.NotContains(t, masked, "badger_secret")
-
-	// Check that asterisks are present for masked fields
-	assert.Contains(t, masked, strings.Repeat("*", len("secret123")))
-	assert.Contains(t, masked, strings.Repeat("*", len("token456")))
-	assert.Contains(t, masked, strings.Repeat("*", len("nats_pass")))
-	assert.Contains(t, masked, strings.Repeat("*", len("badger_secret")))
-}
-
-func TestAppConfig_MarshalJSONMask_EmptyPasswords(t *testing.T) {
-	config := AppConfig{
-		Consul: &ConsulConfig{
-			Address:  "localhost:8500",
-			Username: "admin",
-			Password: "",
-			Token:    "",
-		},
-		NATs: &NATsConfig{
-			URL:      "nats://localhost:4222",
-			Username: "nats_user",
-			Password: "",
-		},
-		BadgerPassword: "",
-	}
-
-	masked := config.MarshalJSONMask()
-
-	// Should not crash with empty passwords
-	assert.NotEmpty(t, masked)
-	assert.Contains(t, masked, "localhost:8500")
-	assert.Contains(t, masked, "admin")
-	assert.Contains(t, masked, "nats_user")
-}
 
 func TestConsulConfig(t *testing.T) {
 	config := ConsulConfig{
@@ -95,31 +33,38 @@ func TestNATsConfig(t *testing.T) {
 	assert.Equal(t, "nats_pass", config.Password)
 }
 
-func TestAppConfig_DefaultValues(t *testing.T) {
-	config := AppConfig{
-		Consul: &ConsulConfig{}, // Initialize with empty struct instead of nil
-		NATs:   &NATsConfig{},   // Initialize with empty struct instead of nil
-	}
+func TestConfig_ApplyDefaults(t *testing.T) {
+	config := &Config{}
+	applyDefaults(config)
 
-	// Should handle default/empty values gracefully
-	masked := config.MarshalJSONMask()
-	assert.NotEmpty(t, masked)
+	assert.Equal(t, defaultEnvironment, config.Environment)
+	assert.Equal(t, defaultBadgerDBPath, config.DBPath)
+	assert.Equal(t, defaultBackupDir, config.BackupDir)
+	assert.Equal(t, defaultBackupPeriodSeconds, config.BackupPeriodSeconds)
+	assert.Equal(t, defaultMaxConcurrentKeygen, config.MaxConcurrentKeygen)
+	assert.Equal(t, defaultMaxConcurrentSigning, config.MaxConcurrentSigning)
+	assert.Equal(t, defaultMaxConcurrentResharing, config.MaxConcurrentResharing)
+	assert.Equal(t, defaultSessionWarmUpDelayMs, config.SessionWarmUpDelayMillis)
+	assert.Equal(t, defaultThreshold, config.Threshold)
+	assert.Equal(t, defaultInitiatorAlgorithm, config.EventInitiatorAlgorithm)
 }
 
-func TestAppConfig_PartialConfig(t *testing.T) {
-	config := AppConfig{
-		Consul: &ConsulConfig{
-			Address: "localhost:8500",
-		},
-		NATs:           &NATsConfig{}, // Initialize to avoid nil pointer
-		BadgerPassword: "test",
+func TestConfig_ApplyDefaults_WithExistingValues(t *testing.T) {
+	config := &Config{
+		Environment: "production",
+		DBPath:      "/custom/path",
+		Threshold:   3,
 	}
+	applyDefaults(config)
 
-	// Should handle partial configuration
-	masked := config.MarshalJSONMask()
-	assert.Contains(t, masked, "localhost:8500")
-	assert.NotContains(t, masked, "test")
-	assert.Contains(t, masked, "****") // masked badger password
+	// Should not override existing values
+	assert.Equal(t, "production", config.Environment)
+	assert.Equal(t, "/custom/path", config.DBPath)
+	assert.Equal(t, 3, config.Threshold)
+
+	// Should apply defaults for empty values
+	assert.Equal(t, defaultBackupDir, config.BackupDir)
+	assert.Equal(t, defaultMaxConcurrentKeygen, config.MaxConcurrentKeygen)
 }
 
 func TestValidateEnvironment(t *testing.T) {
@@ -174,4 +119,126 @@ func TestValidateEnvironment(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestConfigAccessFunctions(t *testing.T) {
+	// Create a test config
+	testConfig := &Config{
+		BadgerPassword:           "test_password",
+		EventInitiatorAlgorithm:  "ed25519",
+		EventInitiatorPubKey:     "test_pubkey",
+		Threshold:                2,
+		MaxConcurrentKeygen:      3,
+		MaxConcurrentSigning:     5,
+		MaxConcurrentResharing:   2,
+		SessionWarmUpDelayMillis: 200,
+		DBPath:                   "/test/db",
+		BackupEnabled:            true,
+		BackupPeriodSeconds:      600,
+		BackupDir:                "/test/backup",
+	}
+
+	// Set the global config
+	setConfig(testConfig)
+
+	// Test all access functions
+	assert.Equal(t, "test_password", BadgerPassword())
+	assert.Equal(t, "ed25519", EventInitiatorAlgorithm())
+	assert.Equal(t, "test_pubkey", EventInitiatorPubKey())
+	assert.Equal(t, 2, Threshold())
+	assert.Equal(t, 3, MaxConcurrentKeygen())
+	assert.Equal(t, 5, MaxConcurrentSigning())
+	assert.Equal(t, 2, MaxConcurrentResharing())
+	assert.Equal(t, 200, SessionWarmUpDelayMillis())
+	assert.Equal(t, "/test/db", DBPath())
+	assert.Equal(t, true, BackupEnabled())
+	assert.Equal(t, 600, BackupPeriodSeconds())
+	assert.Equal(t, "/test/backup", BackupDir())
+}
+
+func TestSetBadgerPassword(t *testing.T) {
+	// Create a test config
+	testConfig := &Config{
+		BadgerPassword: "original_password",
+	}
+	setConfig(testConfig)
+
+	// Test setting password
+	SetBadgerPassword("new_password")
+	assert.Equal(t, "new_password", BadgerPassword())
+}
+
+func TestGetConfig_FatalWhenNotLoaded(t *testing.T) {
+	// This test is skipped because GetConfig() calls logger.Fatal()
+	// which calls os.Exit(1) and cannot be tested in a unit test
+	// In practice, this function should never be called before Load()
+	t.Skip("GetConfig() calls logger.Fatal() which cannot be tested in unit tests")
+}
+
+func TestUpdate_PanicWhenNotLoaded(t *testing.T) {
+	// Reset global config to nil
+	mu.Lock()
+	originalApp := app
+	app = nil
+	mu.Unlock()
+
+	// Restore after test
+	defer func() {
+		mu.Lock()
+		app = originalApp
+		mu.Unlock()
+	}()
+
+	// This should panic
+	assert.Panics(t, func() {
+		Update(func(cfg *Config) {
+			cfg.Threshold = 5
+		})
+	})
+}
+
+func TestSetEnvConfigPath(t *testing.T) {
+	// Test setting config path
+	SetEnvConfigPath("/test/config.yaml")
+	assert.Equal(t, "/test/config.yaml", os.Getenv(EnvConfigFile))
+
+	// Test setting empty path (should not change env)
+	SetEnvConfigPath("")
+	assert.Equal(t, "/test/config.yaml", os.Getenv(EnvConfigFile))
+
+	// Clean up
+	os.Unsetenv(EnvConfigFile)
+}
+
+func TestTLSConfig(t *testing.T) {
+	config := TLSConfig{
+		ClientCert: "client.crt",
+		ClientKey:  "client.key",
+		CACert:     "ca.crt",
+	}
+
+	assert.Equal(t, "client.crt", config.ClientCert)
+	assert.Equal(t, "client.key", config.ClientKey)
+	assert.Equal(t, "ca.crt", config.CACert)
+}
+
+func TestNATsConfig_WithTLS(t *testing.T) {
+	tlsConfig := &TLSConfig{
+		ClientCert: "client.crt",
+		ClientKey:  "client.key",
+		CACert:     "ca.crt",
+	}
+
+	config := NATsConfig{
+		URL:      "nats://secure.example.com:4222",
+		Username: "nats_user",
+		Password: "nats_pass",
+		TLS:      tlsConfig,
+	}
+
+	assert.Equal(t, "nats://secure.example.com:4222", config.URL)
+	assert.Equal(t, "nats_user", config.Username)
+	assert.Equal(t, "nats_pass", config.Password)
+	assert.Equal(t, tlsConfig, config.TLS)
+	assert.Equal(t, "client.crt", config.TLS.ClientCert)
 }

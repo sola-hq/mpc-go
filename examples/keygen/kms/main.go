@@ -29,13 +29,15 @@ func main() {
 
 	flag.Parse()
 
-	config.InitViperConfig("")
+	_, err := config.Load()
+	if err != nil {
+		logger.Fatal("Failed to load config", err)
+	}
 	logger.Init(environment, false)
 
 	// KMS signer only supports P256
 
-	appConfig := config.LoadConfig()
-	natsConn, err := messaging.GetNATSConnection(environment, appConfig.NATs)
+	natsConn, err := messaging.GetNATSConnection()
 	if err != nil {
 		logger.Fatal("Failed to connect to NATS", err)
 	}

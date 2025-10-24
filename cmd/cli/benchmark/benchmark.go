@@ -50,21 +50,21 @@ var (
 )
 
 func createMPCClient() (types.Initiator, error) {
-	configPath := ""
 	keyPath := keyPath
 	promptPassword := promptPassword
 	debug := debug
 
-	// Initialize configuration
-	config.InitViperConfig(configPath)
-	appConfig := config.LoadConfig()
-	environment := appConfig.Environment
+	cfg, err := config.Load()
+	if err != nil {
+		return nil, fmt.Errorf("load config: %w", err)
+	}
+	environment := cfg.Environment
 
 	// Initialize logger
 	logger.Init(environment, debug)
 
 	// Create NATS connection
-	conn, err := messaging.GetNATSConnection(environment, appConfig.NATs)
+	conn, err := messaging.GetNATSConnection()
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to NATS: %w", err)
 	}

@@ -12,12 +12,14 @@ import (
 
 // script to add key type prefix ecdsa for existing keys
 func main() {
-	config.InitViperConfig("")
+	cfg, err := config.Load()
+	if err != nil {
+		logger.Fatal("Failed to load config", err)
+	}
 	logger.Init("production", false)
-	appConfig := config.LoadConfig()
-	logger.Info("App config", "config", appConfig)
+	logger.Info("App config", "config", cfg)
 
-	consulClient := NewConsulClient(appConfig.Consul.Address)
+	consulClient := NewConsulClient(cfg.Consul.Address)
 	kv := consulClient.KV()
 	// Get a handle to the KV API
 	// List all keys with the specified prefix

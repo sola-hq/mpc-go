@@ -8,13 +8,13 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/fystack/mpcium/pkg/config"
 	"github.com/fystack/mpcium/pkg/identity"
 	"github.com/fystack/mpcium/pkg/infra"
 	"github.com/fystack/mpcium/pkg/logger"
 	"github.com/fystack/mpcium/pkg/messaging"
 	"github.com/hashicorp/consul/api"
 	"github.com/samber/lo"
-	"github.com/spf13/viper"
 )
 
 const (
@@ -67,7 +67,7 @@ func NewRegistry(
 	identityStore identity.Store,
 ) *registry {
 	ecdhSession := NewECDHSession(nodeID, peerNodeIDs, pubSub, identityStore)
-	threshold := viper.GetInt("threshold")
+	threshold := config.Threshold()
 	if threshold < 1 {
 		logger.Fatal("threshold must be greater than 0", nil)
 	}

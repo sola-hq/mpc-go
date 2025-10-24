@@ -15,15 +15,16 @@ import (
 	"github.com/fystack/mpcium/pkg/messaging"
 	"github.com/fystack/mpcium/pkg/types"
 	"github.com/google/uuid"
-	"github.com/spf13/viper"
 )
 
 func main() {
-	const environment = "dev"
-	config.InitViperConfig("")
-	logger.Init(environment, true)
+	cfg, err := config.Load()
+	if err != nil {
+		logger.Fatal("Failed to load config", err)
+	}
+	logger.Init(cfg.Environment, true)
 
-	algorithm := viper.GetString("event_initiator_algorithm")
+	algorithm := cfg.EventInitiatorAlgorithm
 	if algorithm == "" {
 		algorithm = string(types.EventInitiatorKeyTypeEd25519)
 	}
@@ -50,8 +51,7 @@ func main() {
 			nil,
 		)
 	}
-	appConfig := config.LoadConfig()
-	natsConn, err := messaging.GetNATSConnection(environment, appConfig.NATs)
+	natsConn, err := messaging.GetNATSConnection()
 	if err != nil {
 		logger.Fatal("Failed to connect to NATS", err)
 	}

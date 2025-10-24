@@ -9,12 +9,11 @@ import (
 	"github.com/fystack/mpcium/pkg/config"
 	"github.com/fystack/mpcium/pkg/logger"
 	"github.com/fystack/mpcium/pkg/security"
-	"github.com/spf13/viper"
 	"golang.org/x/term"
 )
 
 // loadPasswordFromFile reads the BadgerDB password from a file
-func loadPasswordFromFile(filePath string) error {
+func loadPasswordFromFile(cfg *config.Config, filePath string) error {
 	passwordBytes, err := os.ReadFile(filePath)
 	if err != nil {
 		return fmt.Errorf("failed to read password file %s: %w", filePath, err)
@@ -28,7 +27,10 @@ func loadPasswordFromFile(filePath string) error {
 		return fmt.Errorf("password file %s is empty", filePath)
 	}
 
-	viper.Set("badger_password", password)
+	config.SetBadgerPassword(password)
+	if cfg != nil {
+		cfg.BadgerPassword = password
+	}
 	security.ZeroBytes(passwordBytes)
 	security.ZeroString(&password)
 
@@ -36,7 +38,7 @@ func loadPasswordFromFile(filePath string) error {
 }
 
 // Prompt user for sensitive configuration values
-func promptForSensitiveCredentials() {
+func promptForSensitiveCredentials(cfg *config.Config) {
 	fmt.Println("WARNING: Please back up your Badger DB password in a secure location.")
 	fmt.Println("If you lose this password, you will permanently lose access to your data!")
 
@@ -83,7 +85,10 @@ func promptForSensitiveCredentials() {
 	passwordStr := string(badgerPass)
 	maskedPassword := maskString(passwordStr)
 	fmt.Printf("Password set: %s\n", maskedPassword)
-	viper.Set("badger_password", passwordStr)
+	config.SetBadgerPassword(passwordStr)
+	if cfg != nil {
+		cfg.BadgerPassword = passwordStr
+	}
 	security.ZeroString(&passwordStr)
 }
 
@@ -103,13 +108,13 @@ func maskString(s string) string {
 }
 
 // Check required configuration values are present
-func checkRequiredConfigValues(appConfig *config.AppConfig) {
+func checkRequiredConfigValues(cfg *config.Config) {
 	// Show warning if we're using file-based config but no password is set
-	if appConfig.BadgerPassword == "" {
+	if cfg.BadgerPassword == "" {
 		logger.Fatal("Badger password is required", nil)
 	}
 
-	if viper.GetString("event_initiator_pubkey") == "" {
+	if cfg.EventInitiatorPubKey == "" {
 		logger.Fatal("Event initiator public key is required", nil)
 	}
 }
