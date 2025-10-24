@@ -37,7 +37,7 @@ func TestConfig_ApplyDefaults(t *testing.T) {
 	config := &Config{}
 	applyDefaults(config)
 
-	assert.Equal(t, defaultEnvironment, config.Environment)
+	assert.Equal(t, Development, config.Environment)
 	assert.Equal(t, defaultBadgerDBPath, config.DBPath)
 	assert.Equal(t, defaultBackupDir, config.BackupDir)
 	assert.Equal(t, defaultBackupPeriodSeconds, config.BackupPeriodSeconds)

@@ -6,8 +6,8 @@ import (
 	"strings"
 
 	"github.com/dgraph-io/badger/v4"
-	"github.com/fystack/mpcium/pkg/kvstore"
 	"github.com/fystack/mpcium/pkg/logger"
+	"github.com/fystack/mpcium/pkg/storage"
 )
 
 func main() {
@@ -21,7 +21,7 @@ func main() {
 	dbPath := fmt.Sprintf("./db/%s", *nodeName)
 
 	// Create BadgerConfig struct
-	config := kvstore.BadgerConfig{
+	config := storage.BadgerConfig{
 		NodeID:              *nodeName,
 		EncryptionKey:       []byte(""), // Empty key for migration
 		BackupEncryptionKey: []byte(""), // Empty key for migration
@@ -29,7 +29,7 @@ func main() {
 		DBPath:              dbPath,
 	}
 
-	badgerKv, err := kvstore.NewBadgerKVStore(config)
+	badgerKv, err := storage.NewBadgerStore(config)
 	if err != nil {
 		logger.Fatal("Failed to create badger kv store", err)
 	}

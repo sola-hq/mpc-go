@@ -1,4 +1,4 @@
-package kvstore
+package storage
 
 import (
 	"errors"
@@ -13,8 +13,8 @@ var (
 	ErrBackupEncryptionKeyNotProvided = errors.New("backup encryption key not provided")
 )
 
-// BadgerKVStore is an implementation of the KVStore interface using BadgerDB.
-type BadgerKVStore struct {
+// BadgerStore is a Storage implementation backed by BadgerDB.
+type BadgerStore struct {
 	DB             *badger.DB
 	BackupExecutor *badgerBackupExecutor
 }
@@ -27,8 +27,8 @@ type BadgerConfig struct {
 	DBPath              string
 }
 
-// NewBadgerKVStore creates a new BadgerKVStore instance.
-func NewBadgerKVStore(config BadgerConfig) (*BadgerKVStore, error) {
+// NewBadgerStore creates a new BadgerStore instance.
+func NewBadgerStore(config BadgerConfig) (*BadgerStore, error) {
 	// must ensure encryption key is provided
 	if len(config.EncryptionKey) == 0 {
 		return nil, ErrEncryptionKeyNotProvided
@@ -61,18 +61,18 @@ func NewBadgerKVStore(config BadgerConfig) (*BadgerKVStore, error) {
 		config.BackupDir,
 	)
 
-	return &BadgerKVStore{DB: db, BackupExecutor: backupExecutor}, nil
+	return &BadgerStore{DB: db, BackupExecutor: backupExecutor}, nil
 }
 
 // Put stores a key-value pair in the BadgerDB.
-func (b *BadgerKVStore) Put(key string, value []byte) error {
+func (b *BadgerStore) Put(key string, value []byte) error {
 	return b.DB.Update(func(txn *badger.Txn) error {
 		return txn.Set([]byte(key), value)
 	})
 }
 
 // Get retrieves the value associated with a key from BadgerDB.
-func (b *BadgerKVStore) Get(key string) ([]byte, error) {
+func (b *BadgerStore) Get(key string) ([]byte, error) {
 	var result []byte
 	err := b.DB.View(func(txn *badger.Txn) error {
 		item, err := txn.Get([]byte(key))
@@ -88,7 +88,7 @@ func (b *BadgerKVStore) Get(key string) ([]byte, error) {
 	return result, err
 }
 
-func (b *BadgerKVStore) Keys() ([]string, error) {
+func (b *BadgerStore) Keys() ([]string, error) {
 	var keys []string
 	err := b.DB.View(func(txn *badger.Txn) error {
 		opts := badger.DefaultIteratorOptions
@@ -107,13 +107,13 @@ func (b *BadgerKVStore) Keys() ([]string, error) {
 }
 
 // Delete removes a key-value pair from BadgerDB.
-func (b *BadgerKVStore) Delete(key string) error {
+func (b *BadgerStore) Delete(key string) error {
 	return b.DB.Update(func(txn *badger.Txn) error {
 		return txn.Delete([]byte(key))
 	})
 }
 
-func (b *BadgerKVStore) Backup() error {
+func (b *BadgerStore) Backup() error {
 	if b.BackupExecutor == nil {
 		return errors.New("backup executor is not initialized")
 	}
@@ -121,6 +121,6 @@ func (b *BadgerKVStore) Backup() error {
 }
 
 // Close closes the BadgerDB.
-func (b *BadgerKVStore) Close() error {
+func (b *BadgerStore) Close() error {
 	return b.DB.Close()
 }

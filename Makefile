@@ -18,7 +18,7 @@ mpc-cli:
 
 # Install binaries to /usr/local/bin (auto-detects architecture)
 install:
-	@echo "Building and installing mpc-node and mpc-cli binaries for current system..."
+	@echo "Building and installing mpc-node and mpc-cli binaries to /usr/local/bin/..."
 	go build -o /tmp/mpc-node ./cmd/node
 	go build -o /tmp/mpc-cli ./cmd/cli
 	sudo install -m 755 /tmp/mpc-node /usr/local/bin/

@@ -74,7 +74,7 @@ All node-local sensitive data is encrypted:
 
 ```go
 // BadgerDB with mandatory encryption
-	badgerKv, err := kvstore.NewBadgerKVStore(
+	badgerKv, err := storage.NewBadgerStore(
 		dbPath,
 		[]byte(viper.GetString("badger_password")),
 	)

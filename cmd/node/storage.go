@@ -4,11 +4,11 @@ import (
 	"path/filepath"
 
 	"github.com/fystack/mpcium/pkg/config"
-	"github.com/fystack/mpcium/pkg/kvstore"
 	"github.com/fystack/mpcium/pkg/logger"
+	"github.com/fystack/mpcium/pkg/storage"
 )
 
-func NewBadgerKV(nodeName, nodeID string) *kvstore.BadgerKVStore {
+func NewBadgerKV(nodeName, nodeID string) *storage.BadgerStore {
 	// Badger KV DB
 	// Use configured db_path or default to current directory + "db"
 	basePath := config.DBPath()
@@ -24,7 +24,7 @@ func NewBadgerKV(nodeName, nodeID string) *kvstore.BadgerKVStore {
 	}
 
 	// Create BadgerConfig struct
-	badgerConfig := kvstore.BadgerConfig{
+	badgerConfig := storage.BadgerConfig{
 		NodeID:              nodeName,
 		EncryptionKey:       []byte(config.BadgerPassword()),
 		BackupEncryptionKey: []byte(config.BadgerPassword()), // Using same key for backup encryption
@@ -32,7 +32,7 @@ func NewBadgerKV(nodeName, nodeID string) *kvstore.BadgerKVStore {
 		DBPath:              dbPath,
 	}
 
-	badgerKv, err := kvstore.NewBadgerKVStore(badgerConfig)
+	badgerKv, err := storage.NewBadgerStore(badgerConfig)
 	if err != nil {
 		logger.Fatal("Failed to create badger kv store", err)
 	}

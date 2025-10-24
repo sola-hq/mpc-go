@@ -1,4 +1,4 @@
-package eventconsumer
+package consumer
 
 import (
 	"context"
@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/fystack/mpcium/pkg/constant"
 	"github.com/fystack/mpcium/pkg/logger"
 	"github.com/fystack/mpcium/pkg/messaging"
 	"github.com/fystack/mpcium/pkg/mpc"
@@ -22,8 +21,6 @@ const (
 	signingResponseTimeout = 30 * time.Second
 	// How often to poll for the reply message.
 	signingPollingInterval = 500 * time.Millisecond
-	// How often to check if enough peers are ready
-	readinessCheckInterval = 2 * time.Second
 )
 
 // SigningConsumer represents a consumer that processes signing events.
@@ -66,7 +63,7 @@ func (sc *signingConsumer) waitForSufficientPeers(ctx context.Context) error {
 		"required", requiredPeers,
 		"threshold", sc.threshold)
 
-	ticker := time.NewTicker(readinessCheckInterval)
+	ticker := time.NewTicker(ReadinessCheckInterval)
 	defer ticker.Stop()
 
 	for {
@@ -103,8 +100,8 @@ func (sc *signingConsumer) Run(ctx context.Context) error {
 
 	sub, err := sc.jsBroker.CreateSubscription(
 		ctx,
-		constant.SigningConsumerStream,
-		constant.SigningRequestTopic,
+		messaging.SigningConsumerStream,
+		messaging.SigningRequestTopic,
 		sc.handleSigningEvent,
 	)
 	if err != nil {
@@ -232,8 +229,8 @@ func (sc *signingConsumer) handleSigningError(msg types.SigningMessage, errorCod
 		return
 	}
 
-	err = sc.signingResultQueue.Enqueue(constant.SigningResultCompleteTopic, signingResultBytes, &messaging.EnqueueOptions{
-		IdempotentKey: buildIdempotentKey(msg.TxID, sessionID, core.TypeSigningResultFmt),
+	err = sc.signingResultQueue.Enqueue(messaging.SigningResultCompleteTopic, signingResultBytes, &messaging.EnqueueOptions{
+		IdempotentKey: BuildIdempotentKey(msg.TxID, sessionID, core.TypeSigningResultFmt),
 	})
 	if err != nil {
 		logger.Error("Failed to enqueue signing result event", err,
@@ -253,14 +250,4 @@ func (sc *signingConsumer) Close() error {
 		logger.Info("SigningConsumer: Unsubscribed from JetStream")
 	}
 	return nil
-}
-
-func buildIdempotentKey(baseID string, sessionID string, formatTemplate string) string {
-	var uniqueKey string
-	if sessionID != "" {
-		uniqueKey = fmt.Sprintf("%s:%s", baseID, sessionID)
-	} else {
-		uniqueKey = baseID
-	}
-	return fmt.Sprintf(formatTemplate, uniqueKey)
 }

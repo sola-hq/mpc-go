@@ -1,4 +1,4 @@
-package kvstore
+package storage
 
 import (
 	"crypto/rand"
@@ -480,14 +480,14 @@ func (b *badgerBackupExecutor) parseBackupMetadata(path string) (BadgerBackupMet
 	return meta, err
 }
 
-func TestBadgerKVStore_BackupIntegration(t *testing.T) {
+func TestBadgerStore_BackupIntegration(t *testing.T) {
 	testDir := t.TempDir()
 	dbPath := filepath.Join(testDir, "testdb")
 	backupDir := filepath.Join(testDir, "backups")
 
 	encryptionKey, backupEncryptionKey := generateTestKeys()
 
-	// Create BadgerKVStore with BadgerConfig
+	// Create BadgerStore with BadgerConfig
 	config := BadgerConfig{
 		NodeID:              "test-node",
 		EncryptionKey:       encryptionKey,
@@ -496,7 +496,7 @@ func TestBadgerKVStore_BackupIntegration(t *testing.T) {
 		DBPath:              dbPath,
 	}
 
-	store, err := NewBadgerKVStore(config)
+	store, err := NewBadgerStore(config)
 	require.NoError(t, err)
 	defer store.Close()
 

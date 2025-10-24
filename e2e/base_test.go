@@ -17,7 +17,7 @@ import (
 	"github.com/dgraph-io/badger/v4/options"
 	"github.com/fystack/mpcium/pkg/client"
 	"github.com/fystack/mpcium/pkg/client/signer"
-	"github.com/fystack/mpcium/pkg/kvstore"
+	"github.com/fystack/mpcium/pkg/storage"
 	"github.com/fystack/mpcium/pkg/types"
 	"github.com/hashicorp/consul/api"
 	"github.com/nats-io/nats.go"
@@ -533,7 +533,7 @@ func (s *E2ETestSuite) CheckKeyInAllNodes(t *testing.T, walletID, keyType, keyNa
 			t.Logf("Successfully recovered database for %s", nodeName)
 		}
 
-		kvStore := &kvstore.BadgerKVStore{DB: db}
+		kvStore := &storage.BadgerStore{DB: db}
 
 		// Check if our specific key exists
 		data, err := kvStore.Get(key)

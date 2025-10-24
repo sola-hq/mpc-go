@@ -9,14 +9,13 @@ import (
 
 	"github.com/bnb-chain/tss-lib/v2/ecdsa/keygen"
 	"github.com/bnb-chain/tss-lib/v2/tss"
-	"github.com/fystack/mpcium/pkg/identity"
-	"github.com/fystack/mpcium/pkg/keyinfo"
-	"github.com/fystack/mpcium/pkg/kvstore"
 	"github.com/fystack/mpcium/pkg/logger"
 	"github.com/fystack/mpcium/pkg/messaging"
 	"github.com/fystack/mpcium/pkg/mpc/core"
 	"github.com/fystack/mpcium/pkg/mpc/ecdsa"
 	"github.com/fystack/mpcium/pkg/mpc/eddsa"
+	"github.com/fystack/mpcium/pkg/node"
+	"github.com/fystack/mpcium/pkg/storage"
 )
 
 const (
@@ -34,12 +33,13 @@ type Node struct {
 	nodeID  string
 	peerIDs []string
 
-	pubSub         messaging.PubSub
-	direct         messaging.DirectMessaging
-	kvstore        kvstore.KVStore
-	keyinfoStore   keyinfo.Store
-	ecdsaPreParams []*keygen.LocalPreParams
-	identityStore  identity.Store
+	preParams    []*keygen.LocalPreParams
+	pubSub       messaging.PubSub
+	direct       messaging.DirectMessaging
+	KVstore      storage.Store
+	keyinfoStore node.KeyStore
+
+	identityStore node.IdentityStore
 
 	peerRegistry PeerRegistry
 }
@@ -49,10 +49,10 @@ func NewNode(
 	peerIDs []string,
 	pubSub messaging.PubSub,
 	direct messaging.DirectMessaging,
-	kvstore kvstore.KVStore,
-	keyinfoStore keyinfo.Store,
+	KVstore storage.Store,
+	keyinfoStore node.KeyStore,
 	peerRegistry PeerRegistry,
-	identityStore identity.Store,
+	identityStore node.IdentityStore,
 ) *Node {
 	start := time.Now()
 	elapsed := time.Since(start)
@@ -63,12 +63,12 @@ func NewNode(
 		peerIDs:       peerIDs,
 		pubSub:        pubSub,
 		direct:        direct,
-		kvstore:       kvstore,
+		KVstore:       KVstore,
 		keyinfoStore:  keyinfoStore,
 		peerRegistry:  peerRegistry,
 		identityStore: identityStore,
 	}
-	node.ecdsaPreParams = node.generatePreParams()
+	node.preParams = node.generatePreParams()
 
 	// Start watching peers - ECDH is now handled by the registry
 	go peerRegistry.WatchPeersReady()
@@ -86,7 +86,7 @@ func (p *Node) CreateKeyGenSession(
 	resultQueue messaging.MessageQueue,
 ) (core.KeyGenSession, error) {
 	if !p.peerRegistry.ArePeersReady() {
-		return nil, errors.New("All nodes are not ready!")
+		return nil, errors.New("all nodes are not ready")
 	}
 
 	keyInfo, _ := p.getKeyInfo(sessionType, walletID)
@@ -115,8 +115,8 @@ func (p *Node) createECDSAKeyGenSession(walletID string, threshold int, version 
 		selfPartyID,
 		allPartyIDs,
 		threshold,
-		p.ecdsaPreParams[0],
-		p.kvstore,
+		p.preParams[0],
+		p.KVstore,
 		p.keyinfoStore,
 		resultQueue,
 		p.identityStore,
@@ -135,7 +135,7 @@ func (p *Node) createEDDSAKeyGenSession(walletID string, threshold int, version 
 		selfPartyID,
 		allPartyIDs,
 		threshold,
-		p.kvstore,
+		p.KVstore,
 		p.keyinfoStore,
 		resultQueue,
 		p.identityStore,
@@ -189,8 +189,8 @@ func (p *Node) CreateSigningSession(
 			selfPartyID,
 			allPartyIDs,
 			keyInfo.Threshold,
-			p.ecdsaPreParams[0],
-			p.kvstore,
+			p.preParams[0],
+			p.KVstore,
 			p.keyinfoStore,
 			resultQueue,
 			p.identityStore,
@@ -207,7 +207,7 @@ func (p *Node) CreateSigningSession(
 			selfPartyID,
 			allPartyIDs,
 			keyInfo.Threshold,
-			p.kvstore,
+			p.KVstore,
 			p.keyinfoStore,
 			resultQueue,
 			p.identityStore,
@@ -243,7 +243,7 @@ func (n *Node) keygenPartyIDs(
 	return
 }
 
-func (p *Node) getKeyInfo(sessionType core.SessionType, walletID string) (*keyinfo.KeyInfo, error) {
+func (p *Node) getKeyInfo(sessionType core.SessionType, walletID string) (*node.KeyInfo, error) {
 	var keyID string
 	switch sessionType {
 	case core.SessionTypeECDSA:
@@ -256,7 +256,7 @@ func (p *Node) getKeyInfo(sessionType core.SessionType, walletID string) (*keyin
 	return p.keyinfoStore.Get(keyID)
 }
 
-func (p *Node) getReadyPeersForSession(keyInfo *keyinfo.KeyInfo, readyPeers []string) []string {
+func (p *Node) getReadyPeersForSession(keyInfo *node.KeyInfo, readyPeers []string) []string {
 	// Ensure all participants are ready
 	readyParticipantIDs := make([]string, 0, len(keyInfo.ParticipantPeerIDs))
 	for _, peerID := range keyInfo.ParticipantPeerIDs {
@@ -268,7 +268,7 @@ func (p *Node) getReadyPeersForSession(keyInfo *keyinfo.KeyInfo, readyPeers []st
 	return readyParticipantIDs
 }
 
-func (p *Node) ensureNodeIsParticipant(keyInfo *keyinfo.KeyInfo) error {
+func (p *Node) ensureNodeIsParticipant(keyInfo *node.KeyInfo) error {
 	if !slices.Contains(keyInfo.ParticipantPeerIDs, p.nodeID) {
 		return core.ErrNotInParticipantList
 	}
@@ -370,9 +370,9 @@ func (p *Node) CreateResharingSession(
 
 	switch sessionType {
 	case core.SessionTypeECDSA:
-		preParams := p.ecdsaPreParams[0]
+		preParams := p.preParams[0]
 		if isNewPeer {
-			preParams = p.ecdsaPreParams[1]
+			preParams = p.preParams[1]
 			participantPeerIDs = newPeerIDs
 		} else {
 			participantPeerIDs = oldKeyInfo.ParticipantPeerIDs
@@ -389,7 +389,7 @@ func (p *Node) CreateResharingSession(
 			oldKeyInfo.Threshold,
 			newThreshold,
 			preParams,
-			p.kvstore,
+			p.KVstore,
 			p.keyinfoStore,
 			resultQueue,
 			p.identityStore,
@@ -409,7 +409,7 @@ func (p *Node) CreateResharingSession(
 			newAllPartyIDs,
 			oldKeyInfo.Threshold,
 			newThreshold,
-			p.kvstore,
+			p.KVstore,
 			p.keyinfoStore,
 			resultQueue,
 			p.identityStore,
@@ -436,11 +436,11 @@ func (p *Node) Close() {
 
 func (p *Node) generatePreParams() []*keygen.LocalPreParams {
 	start := time.Now()
-	// Try to load from kvstore
+	// Try to load from storage
 	preParams := make([]*keygen.LocalPreParams, 2)
 	for i := 0; i < 2; i++ {
 		key := fmt.Sprintf("pre_params_%d", i)
-		val, err := p.kvstore.Get(key)
+		val, err := p.KVstore.Get(key)
 		if err == nil && val != nil {
 			preParams[i] = &keygen.LocalPreParams{}
 			err = json.Unmarshal(val, preParams[i])
@@ -458,7 +458,7 @@ func (p *Node) generatePreParams() []*keygen.LocalPreParams {
 		if err != nil {
 			logger.Fatal("Marshal pre params failed", err)
 		}
-		err = p.kvstore.Put(key, bytes)
+		err = p.KVstore.Put(key, bytes)
 		if err != nil {
 			logger.Fatal("Save pre params failed", err)
 		}

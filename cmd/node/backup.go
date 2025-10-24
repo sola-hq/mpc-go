@@ -4,15 +4,15 @@ import (
 	"context"
 	"time"
 
-	"github.com/fystack/mpcium/pkg/kvstore"
 	"github.com/fystack/mpcium/pkg/logger"
+	"github.com/fystack/mpcium/pkg/storage"
 )
 
 const (
 	DefaultBackupPeriodSeconds = 300 // (5 minutes)
 )
 
-func StartPeriodicBackup(ctx context.Context, badgerKV *kvstore.BadgerKVStore, periodSeconds int) func() {
+func StartPeriodicBackup(ctx context.Context, badgerKV *storage.BadgerStore, periodSeconds int) func() {
 	if periodSeconds <= 0 {
 		periodSeconds = DefaultBackupPeriodSeconds
 	}

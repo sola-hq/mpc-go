@@ -13,14 +13,18 @@ import (
 )
 
 const (
-	defaultEnvironment            = "development"
+	// Environment constants
+	Production  = "production"
+	Development = "development"
+
+	defaultStorageType            = "badger"
 	defaultBadgerDBPath           = "."
 	defaultBackupDir              = "backups"
 	defaultBackupPeriodSeconds    = 300
 	defaultMaxConcurrentKeygen    = 2
 	defaultMaxConcurrentSigning   = 10
 	defaultMaxConcurrentResharing = 5
-	defaultSessionWarmUpDelayMs   = 100
+	defaultSessionWarmUpDelayMs   = 10
 	defaultThreshold              = 1
 	defaultInitiatorAlgorithm     = "ed25519"
 
@@ -33,6 +37,7 @@ type Config struct {
 
 	Environment string `mapstructure:"environment"`
 
+	// Storage configuration
 	BadgerPassword string `mapstructure:"badger_password"`
 	DBPath         string `mapstructure:"db_path"`
 
@@ -81,7 +86,8 @@ func initConfig() error {
 	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
 	viper.AutomaticEnv()
 
-	viper.SetDefault("environment", defaultEnvironment)
+	viper.SetDefault("environment", Development)
+	viper.SetDefault("storage_type", defaultStorageType)
 	viper.SetDefault("db_path", defaultBadgerDBPath)
 	viper.SetDefault("backup_dir", defaultBackupDir)
 	viper.SetDefault("backup_period_seconds", defaultBackupPeriodSeconds)
@@ -156,7 +162,7 @@ func Load() (*Config, error) {
 }
 
 func validateEnvironment(environment string) error {
-	validEnvironments := []string{"production", "development"}
+	validEnvironments := []string{Production, Development}
 
 	if !slices.Contains(validEnvironments, environment) {
 		return fmt.Errorf("invalid environment '%s'. Must be one of: %s", environment, strings.Join(validEnvironments, ", "))
@@ -166,7 +172,7 @@ func validateEnvironment(environment string) error {
 
 func applyDefaults(cfg *Config) {
 	if cfg.Environment == "" {
-		cfg.Environment = defaultEnvironment
+		cfg.Environment = Development
 	}
 	if cfg.DBPath == "" {
 		cfg.DBPath = defaultBadgerDBPath
@@ -287,4 +293,8 @@ func Environment() string {
 
 func BackupDir() string {
 	return GetConfig().BackupDir
+}
+
+func IsProduction() bool {
+	return strings.EqualFold(Environment(), Production)
 }

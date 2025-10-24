@@ -1,4 +1,4 @@
-package kvstore
+package storage
 
 import (
 	"fmt"

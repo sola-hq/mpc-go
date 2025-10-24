@@ -1,4 +1,4 @@
-package identity
+package file
 
 import (
 	"crypto/ecdsa"
@@ -22,61 +22,28 @@ import (
 	"github.com/fystack/mpcium/pkg/encryption"
 	"github.com/fystack/mpcium/pkg/filesystem"
 	"github.com/fystack/mpcium/pkg/logger"
+	"github.com/fystack/mpcium/pkg/node"
 	"github.com/fystack/mpcium/pkg/security"
 	"github.com/fystack/mpcium/pkg/types"
 )
 
-// NodeIdentity represents a node's identity information
-type NodeIdentity struct {
-	NodeName  string `json:"node_name"`
-	NodeID    string `json:"node_id"`
-	PublicKey string `json:"public_key"`
-	CreatedAt string `json:"created_at"`
-}
-
-// Store manages node identities
-type Store interface {
-	// GetPublicKey retrieves a node's public key by its ID
-	GetPublicKey(nodeID string) ([]byte, error)
-	VerifyInitiatorMessage(msg types.InitiatorMessage) error
-	SignMessage(msg *types.TssMessage) ([]byte, error)
-	VerifyMessage(msg *types.TssMessage) error
-
-	SignEcdhMessage(msg *types.ECDHMessage) ([]byte, error)
-	VerifySignature(msg *types.ECDHMessage) error
-
-	SetSymmetricKey(peerID string, key []byte)
-	GetSymmetricKey(peerID string) ([]byte, error)
-	RemoveSymmetricKey(peerID string)
-	GetSymmetricKeyCount() int
-	CheckSymmetricKeyComplete(desired int) bool
-
-	EncryptMessage(plaintext []byte, peerID string) ([]byte, error)
-	DecryptMessage(cipher []byte, peerID string) ([]byte, error)
-}
-
-type InitiatorKey struct {
+type initiatorKey struct {
 	Algorithm types.EventInitiatorKeyType
 	Ed25519   []byte
 	P256      *ecdsa.PublicKey
 }
 
-// fileStore implements the Store interface using the filesystem
 type fileStore struct {
 	identityDir     string
 	currentNodeName string
-
-	// Cache for public keys by node_id
-	publicKeys map[string][]byte
-	mu         sync.RWMutex
-
-	privateKey    []byte
-	initiatorKey  *InitiatorKey
-	symmetricKeys map[string][]byte
+	publicKeys      map[string][]byte
+	mu              sync.RWMutex
+	privateKey      []byte
+	initiatorKey    *initiatorKey
+	symmetricKeys   map[string][]byte
 }
 
-// NewFileStore creates a new identity store
-func NewFileStore(identityDir, nodeName string, decrypt bool, agePasswordFile string) (*fileStore, error) {
+func NewFileStore(identityDir, nodeName string, decrypt bool, agePasswordFile string) (node.IdentityStore, error) {
 	if err := os.MkdirAll(identityDir, 0750); err != nil {
 		return nil, fmt.Errorf("failed to create identity directory: %w", err)
 	}
@@ -96,7 +63,6 @@ func NewFileStore(identityDir, nodeName string, decrypt bool, agePasswordFile st
 		return nil, err
 	}
 
-	// Load peers.json to validate all nodes have identity files
 	peersData, err := os.ReadFile("peers.json")
 	if err != nil {
 		return nil, fmt.Errorf("failed to read peers.json: %w", err)
@@ -116,42 +82,30 @@ func NewFileStore(identityDir, nodeName string, decrypt bool, agePasswordFile st
 		symmetricKeys:   make(map[string][]byte),
 	}
 
-	// Check that each node in peers.json has an identity file
-	for nodeName, nodeID := range peers {
-		identityFileName := fmt.Sprintf("%s_identity.json", nodeName)
+	for peerName, peerID := range peers {
+		identityFileName := fmt.Sprintf("%s_identity.json", peerName)
 		identityFilePath, err := filesystem.SafePath(identityDir, identityFileName)
 		if err != nil {
-			return nil, fmt.Errorf("invalid identity file path for node %s: %w", nodeName, err)
+			return nil, fmt.Errorf("invalid identity file path for node %s: %w", peerName, err)
 		}
 
 		data, err := os.ReadFile(identityFilePath)
 		if err != nil {
-			return nil, fmt.Errorf(
-				"missing identity file for node %s (%s): %w",
-				nodeName,
-				nodeID,
-				err,
-			)
+			return nil, fmt.Errorf("missing identity file for node %s (%s): %w", peerName, peerID, err)
 		}
 
-		var identity NodeIdentity
+		var identity node.NodeIdentity
 		if err := json.Unmarshal(data, &identity); err != nil {
-			return nil, fmt.Errorf("failed to parse identity file for node %s: %w", nodeName, err)
+			return nil, fmt.Errorf("failed to parse identity file for node %s: %w", peerName, err)
 		}
 
-		// Verify that the nodeID in peers.json matches the one in the identity file
-		if identity.NodeID != nodeID {
-			return nil, fmt.Errorf(
-				"node ID mismatch for %s: %s in peers.json vs %s in identity file",
-				nodeName,
-				nodeID,
-				identity.NodeID,
-			)
+		if identity.NodeID != peerID {
+			return nil, fmt.Errorf("node ID mismatch for %s: %s in peers.json vs %s in identity file", peerName, peerID, identity.NodeID)
 		}
 
 		key, err := hex.DecodeString(identity.PublicKey)
 		if err != nil {
-			return nil, fmt.Errorf("invalid public key format for node %s: %w", nodeName, err)
+			return nil, fmt.Errorf("invalid public key format for node %s: %w", peerName, err)
 		}
 
 		store.publicKeys[identity.NodeID] = key
@@ -160,55 +114,35 @@ func NewFileStore(identityDir, nodeName string, decrypt bool, agePasswordFile st
 	return store, nil
 }
 
-func loadInitiatorKeys() (*InitiatorKey, error) {
-	// Get algorithm configuration with default
+func loadInitiatorKeys() (*initiatorKey, error) {
 	algorithm := config.EventInitiatorAlgorithm()
 	if algorithm == "" {
 		algorithm = string(types.KeyTypeEd25519)
 	}
 
-	// Validate algorithm
-	if !slices.Contains(
-		[]string{string(types.EventInitiatorKeyTypeEd25519), string(types.EventInitiatorKeyTypeP256)},
-		algorithm,
-	) {
-		return nil, fmt.Errorf("invalid algorithm: %s. Must be %s or %s",
-			algorithm,
-			types.EventInitiatorKeyTypeEd25519,
-			types.EventInitiatorKeyTypeP256,
-		)
+	if !slices.Contains([]string{string(types.EventInitiatorKeyTypeEd25519), string(types.EventInitiatorKeyTypeP256)}, algorithm) {
+		return nil, fmt.Errorf("invalid algorithm: %s. Must be ed25519 or p256", algorithm)
 	}
-
-	var initiatorKey *InitiatorKey
 
 	switch algorithm {
 	case string(types.EventInitiatorKeyTypeEd25519):
 		key, err := loadEd25519InitiatorKey()
 		if err != nil {
-			return nil, fmt.Errorf("failed to load Ed25519 initiator key: %w", err)
-		}
-		initiatorKey = &InitiatorKey{
-			Algorithm: types.EventInitiatorKeyTypeEd25519,
-			Ed25519:   key,
+			return nil, err
 		}
 		logger.Info("Loaded Ed25519 initiator public key")
-
+		return &initiatorKey{Algorithm: types.EventInitiatorKeyTypeEd25519, Ed25519: key}, nil
 	case string(types.EventInitiatorKeyTypeP256):
 		key, err := loadP256InitiatorKey()
 		if err != nil {
-			return nil, fmt.Errorf("failed to load P-256 initiator key: %w", err)
-		}
-		initiatorKey = &InitiatorKey{
-			Algorithm: types.EventInitiatorKeyTypeP256,
-			P256:      key,
+			return nil, err
 		}
 		logger.Info("Loaded P-256 initiator public key")
+		return &initiatorKey{Algorithm: types.EventInitiatorKeyTypeP256, P256: key}, nil
 	}
-
-	return initiatorKey, nil
+	return nil, fmt.Errorf("unsupported algorithm: %s", algorithm)
 }
 
-// loadEd25519InitiatorKey loads Ed25519 initiator public key
 func loadEd25519InitiatorKey() ([]byte, error) {
 	pubKeyHex := config.EventInitiatorPubKey()
 	if pubKeyHex == "" {
@@ -216,13 +150,10 @@ func loadEd25519InitiatorKey() ([]byte, error) {
 	}
 
 	key, err := encryption.ParseEd25519PublicKeyFromHex(pubKeyHex)
-
 	if err != nil {
 		return nil, fmt.Errorf("failed to decode event_initiator_pubkey as hex: %w", err)
 	}
-
 	return key, nil
-
 }
 
 func loadP256InitiatorKey() (*ecdsa.PublicKey, error) {
@@ -231,121 +162,24 @@ func loadP256InitiatorKey() (*ecdsa.PublicKey, error) {
 		return nil, fmt.Errorf("event_initiator_pubkey not found in config")
 	}
 
-	// Use the new P256 functions from p256.go
-	publicKey, err := encryption.ParseP256PublicKeyFromHex(pubKeyHex)
-	if err == nil {
-		return publicKey, nil
+	if key, err := encryption.ParseP256PublicKeyFromHex(pubKeyHex); err == nil {
+		return key, nil
 	}
 
-	// If hex parsing fails, try base64
-	publicKey, err = encryption.ParseP256PublicKeyFromBase64(pubKeyHex)
-	if err == nil {
-		return publicKey, nil
+	key, err := encryption.ParseP256PublicKeyFromBase64(pubKeyHex)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode event_initiator_pubkey as hex or base64: %w", err)
 	}
 
-	return nil, fmt.Errorf(
-		"failed to decode event_initiator_pubkey as hex or base64: %w",
-		err,
-	)
+	return key, nil
 }
 
-// loadPrivateKey loads the private key from file, decrypting if necessary
-func loadPrivateKey(identityDir, nodeName string, decrypt bool, agePasswordFile string) (string, error) {
-	// Check for encrypted or unencrypted private key
-	encryptedKeyFileName := fmt.Sprintf("%s_private.key.age", nodeName)
-	unencryptedKeyFileName := fmt.Sprintf("%s_private.key", nodeName)
-
-	encryptedKeyPath, err := filesystem.SafePath(identityDir, encryptedKeyFileName)
-	if err != nil {
-		return "", fmt.Errorf("invalid encrypted key path for node %s: %w", nodeName, err)
-	}
-
-	unencryptedKeyPath, err := filesystem.SafePath(identityDir, unencryptedKeyFileName)
-	if err != nil {
-		return "", fmt.Errorf("invalid unencrypted key path for node %s: %w", nodeName, err)
-	}
-
-	if decrypt {
-		// Use the encrypted age file
-		if _, err := os.Stat(encryptedKeyPath); err != nil {
-			return "", fmt.Errorf("failed to check encrypted private key for node %s at %s: %w",
-				nodeName, encryptedKeyPath, err)
-		}
-
-		logger.Infof("Using age-encrypted private key for %s", nodeName)
-
-		// Open the encrypted file
-		encryptedFile, err := os.Open(encryptedKeyPath)
-		if err != nil {
-			return "", fmt.Errorf("failed to open encrypted key file: %w", err)
-		}
-		defer encryptedFile.Close()
-
-		var passphrase string
-		if agePasswordFile != "" {
-			// Load passphrase from file
-			data, err := os.ReadFile(agePasswordFile)
-			if err != nil {
-				return "", fmt.Errorf("failed to read age key file %s: %w", agePasswordFile, err)
-			}
-			passphrase = strings.TrimSpace(string(data)) // trim newline if present
-			security.ZeroBytes(data)
-			logger.Infof("Using passphrase from from file: %s to decrypt node private key", agePasswordFile)
-		} else {
-			// Prompt for passphrase from terminal
-			fmt.Print("Enter passphrase to decrypt private key: ")
-			bytePassword, err := term.ReadPassword(int(syscall.Stdin))
-			fmt.Println() // newline after prompt
-			if err != nil {
-				return "", fmt.Errorf("failed to read passphrase: %w", err)
-			}
-			passphrase = string(bytePassword)
-			security.ZeroBytes(bytePassword)
-		}
-
-		// Create the identity once, regardless of source
-		identity, err := age.NewScryptIdentity(passphrase)
-		if err != nil {
-			return "", fmt.Errorf("failed to create identity for decryption: %w", err)
-		}
-
-		// Decrypt the file
-		decrypter, err := age.Decrypt(encryptedFile, identity)
-		if err != nil {
-			return "", fmt.Errorf("failed to decrypt private key: %w", err)
-		}
-
-		// Read the decrypted content
-		decryptedData, err := io.ReadAll(decrypter)
-		if err != nil {
-			return "", fmt.Errorf("failed to read decrypted key: %w", err)
-		}
-
-		security.ZeroString(&passphrase)
-		return string(decryptedData), nil
-	} else {
-		// Use the unencrypted private key file
-		if _, err := os.Stat(unencryptedKeyPath); err != nil {
-			return "", fmt.Errorf("no unencrypted private key found for node %s", nodeName)
-		}
-
-		logger.Infof("Using unencrypted private key for %s", nodeName)
-		privateKeyData, err := os.ReadFile(unencryptedKeyPath)
-		if err != nil {
-			return "", fmt.Errorf("failed to read private key file: %w", err)
-		}
-		return string(privateKeyData), nil
-	}
-}
-
-// Set SymmetricKey: adds or updates a symmetric key for a given peer ID.
 func (s *fileStore) SetSymmetricKey(peerID string, key []byte) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.symmetricKeys[peerID] = key
 }
 
-// Get SymmetricKey: retrieves a peer node's dh symmetric-key by its ID
 func (s *fileStore) GetSymmetricKey(peerID string) ([]byte, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -354,7 +188,7 @@ func (s *fileStore) GetSymmetricKey(peerID string) ([]byte, error) {
 		return key, nil
 	}
 
-	return nil, fmt.Errorf("SymmetricKey key not found for node ID: %s", peerID)
+	return nil, fmt.Errorf("symmetric key not found for node ID: %s", peerID)
 }
 
 func (s *fileStore) RemoveSymmetricKey(peerID string) {
@@ -375,7 +209,6 @@ func (s *fileStore) CheckSymmetricKeyComplete(desired int) bool {
 	return len(s.symmetricKeys) == desired
 }
 
-// GetPublicKey retrieves a node's public key by its ID
 func (s *fileStore) GetPublicKey(nodeID string) ([]byte, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -388,7 +221,6 @@ func (s *fileStore) GetPublicKey(nodeID string) ([]byte, error) {
 }
 
 func (s *fileStore) SignMessage(msg *types.TssMessage) ([]byte, error) {
-	// Get deterministic bytes for signing
 	msgBytes, err := msg.MarshalForSigning()
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal message for signing: %w", err)
@@ -398,28 +230,23 @@ func (s *fileStore) SignMessage(msg *types.TssMessage) ([]byte, error) {
 	return signature, nil
 }
 
-// VerifyMessage verifies a TSS message's signature using the sender's public key
 func (s *fileStore) VerifyMessage(msg *types.TssMessage) error {
 	if msg.Signature == nil {
 		return fmt.Errorf("message has no signature")
 	}
 
-	// Get the sender's NodeID
 	senderNodeID := partyIDToNodeID(msg.From)
 
-	// Get the sender's public key
 	publicKey, err := s.GetPublicKey(senderNodeID)
 	if err != nil {
 		return fmt.Errorf("failed to get sender's public key: %w", err)
 	}
 
-	// Get deterministic bytes for verification
 	msgBytes, err := msg.MarshalForSigning()
 	if err != nil {
 		return fmt.Errorf("failed to marshal message for verification: %w", err)
 	}
 
-	// Verify the signature
 	if !ed25519.Verify(publicKey, msgBytes, msg.Signature) {
 		return fmt.Errorf("invalid signature")
 	}
@@ -442,7 +269,6 @@ func (s *fileStore) EncryptMessage(plaintext []byte, peerID string) ([]byte, err
 
 func (s *fileStore) DecryptMessage(cipher []byte, peerID string) ([]byte, error) {
 	key, err := s.GetSymmetricKey(peerID)
-
 	if err != nil {
 		return nil, err
 	}
@@ -450,12 +276,11 @@ func (s *fileStore) DecryptMessage(cipher []byte, peerID string) ([]byte, error)
 	if key == nil {
 		return nil, fmt.Errorf("no symmetric key for peer %s", peerID)
 	}
+
 	return encryption.DecryptAESGCMWithNonceEmbed(cipher, key)
 }
 
-// Sign ECDH key exchange message
 func (s *fileStore) SignEcdhMessage(msg *types.ECDHMessage) ([]byte, error) {
-	// Get deterministic bytes for signing
 	msgBytes, err := msg.MarshalForSigning()
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal message for signing: %w", err)
@@ -465,25 +290,21 @@ func (s *fileStore) SignEcdhMessage(msg *types.ECDHMessage) ([]byte, error) {
 	return signature, nil
 }
 
-// Verify ECDH key exchange message
 func (s *fileStore) VerifySignature(msg *types.ECDHMessage) error {
 	if msg.Signature == nil {
 		return fmt.Errorf("ECDH message has no signature")
 	}
 
-	// Get the sender's public key
 	senderPk, err := s.GetPublicKey(msg.From)
 	if err != nil {
 		return fmt.Errorf("failed to get sender's public key: %w", err)
 	}
 
-	// Get deterministic bytes for verification
 	msgBytes, err := msg.MarshalForSigning()
 	if err != nil {
 		return fmt.Errorf("failed to marshal message for verification: %w", err)
 	}
 
-	// Verify the signature
 	if !ed25519.Verify(senderPk, msgBytes, msg.Signature) {
 		return fmt.Errorf("invalid signature from %s with public key %s", msg.From, hex.EncodeToString(senderPk))
 	}
@@ -492,15 +313,14 @@ func (s *fileStore) VerifySignature(msg *types.ECDHMessage) error {
 }
 
 func (s *fileStore) VerifyInitiatorMessage(msg types.InitiatorMessage) error {
-	algo := s.initiatorKey.Algorithm
-
-	switch algo {
+	switch s.initiatorKey.Algorithm {
 	case types.EventInitiatorKeyTypeEd25519:
 		return s.verifyEd25519(msg)
 	case types.EventInitiatorKeyTypeP256:
 		return s.verifyP256(msg)
+	default:
+		return fmt.Errorf("unsupported algorithm: %s", s.initiatorKey.Algorithm)
 	}
-	return fmt.Errorf("unsupported algorithm: %s", algo)
 }
 
 func (s *fileStore) verifyEd25519(msg types.InitiatorMessage) error {
@@ -535,4 +355,81 @@ func (s *fileStore) verifyP256(msg types.InitiatorMessage) error {
 
 func partyIDToNodeID(partyID *tss.PartyID) string {
 	return strings.Split(string(partyID.KeyInt().Bytes()), ":")[0]
+}
+
+func loadPrivateKey(identityDir, nodeName string, decrypt bool, agePasswordFile string) (string, error) {
+	encryptedKeyFileName := fmt.Sprintf("%s_private.key.age", nodeName)
+	unencryptedKeyFileName := fmt.Sprintf("%s_private.key", nodeName)
+
+	encryptedKeyPath, err := filesystem.SafePath(identityDir, encryptedKeyFileName)
+	if err != nil {
+		return "", fmt.Errorf("invalid encrypted key path for node %s: %w", nodeName, err)
+	}
+
+	unencryptedKeyPath, err := filesystem.SafePath(identityDir, unencryptedKeyFileName)
+	if err != nil {
+		return "", fmt.Errorf("invalid unencrypted key path for node %s: %w", nodeName, err)
+	}
+
+	if decrypt {
+		if _, err := os.Stat(encryptedKeyPath); err != nil {
+			return "", fmt.Errorf("failed to check encrypted private key for node %s at %s: %w", nodeName, encryptedKeyPath, err)
+		}
+
+		logger.Infof("Using age-encrypted private key for %s", nodeName)
+
+		encryptedFile, err := os.Open(encryptedKeyPath)
+		if err != nil {
+			return "", fmt.Errorf("failed to open encrypted key file: %w", err)
+		}
+		defer encryptedFile.Close()
+
+		var passphrase string
+		if agePasswordFile != "" {
+			data, err := os.ReadFile(agePasswordFile)
+			if err != nil {
+				return "", fmt.Errorf("failed to read age key file %s: %w", agePasswordFile, err)
+			}
+			passphrase = strings.TrimSpace(string(data))
+			security.ZeroBytes(data)
+			logger.Infof("Using passphrase from from file: %s to decrypt node private key", agePasswordFile)
+		} else {
+			fmt.Print("Enter passphrase to decrypt private key: ")
+			bytePassword, err := term.ReadPassword(int(syscall.Stdin))
+			fmt.Println()
+			if err != nil {
+				return "", fmt.Errorf("failed to read passphrase: %w", err)
+			}
+			passphrase = string(bytePassword)
+			security.ZeroBytes(bytePassword)
+		}
+
+		identity, err := age.NewScryptIdentity(passphrase)
+		if err != nil {
+			return "", fmt.Errorf("failed to create identity for decryption: %w", err)
+		}
+
+		decrypter, err := age.Decrypt(encryptedFile, identity)
+		if err != nil {
+			return "", fmt.Errorf("failed to decrypt private key: %w", err)
+		}
+
+		decryptedData, err := io.ReadAll(decrypter)
+		if err != nil {
+			return "", fmt.Errorf("failed to read decrypted key: %w", err)
+		}
+
+		security.ZeroString(&passphrase)
+		return string(decryptedData), nil
+	}
+
+	if _, err := os.Stat(unencryptedKeyPath); err != nil {
+		return "", fmt.Errorf("no unencrypted private key found for node %s", nodeName)
+	}
+
+	privateKeyData, err := os.ReadFile(unencryptedKeyPath)
+	if err != nil {
+		return "", fmt.Errorf("failed to read private key file: %w", err)
+	}
+	return string(privateKeyData), nil
 }

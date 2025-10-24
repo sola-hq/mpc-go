@@ -1,4 +1,4 @@
-package eventconsumer
+package consumer
 
 import (
 	"context"
@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/fystack/mpcium/pkg/constant"
 	"github.com/fystack/mpcium/pkg/logger"
 	"github.com/fystack/mpcium/pkg/messaging"
 	"github.com/fystack/mpcium/pkg/mpc"
@@ -61,8 +60,8 @@ func NewResharingConsumer(
 func (rc *resharingConsumer) Run(ctx context.Context) error {
 	sub, err := rc.jsBroker.CreateSubscription(
 		ctx,
-		constant.ResharingConsumerStream,
-		constant.ResharingRequestTopic,
+		messaging.ResharingConsumerStream,
+		messaging.ResharingRequestTopic,
 		rc.handleResharingEvent,
 	)
 	if err != nil {
@@ -157,8 +156,8 @@ func (rc *resharingConsumer) handleResharingError(msg types.ResharingMessage, er
 		return
 	}
 
-	err = rc.resharingResultQueue.Enqueue(constant.ResharingResultCompleteTopic, resharingResultBytes, &messaging.EnqueueOptions{
-		IdempotentKey: buildIdempotentKey(msg.WalletID, sessionID, core.TypeResharingWalletResultFmt),
+	err = rc.resharingResultQueue.Enqueue(messaging.ResharingResultCompleteTopic, resharingResultBytes, &messaging.EnqueueOptions{
+		IdempotentKey: BuildIdempotentKey(msg.WalletID, sessionID, core.TypeResharingWalletResultFmt),
 	})
 	if err != nil {
 		logger.Error("Failed to enqueue resharing result event", err, "walletID", msg.WalletID)

@@ -1,4 +1,4 @@
-package eventconsumer
+package consumer
 
 import (
 	"context"
@@ -10,27 +10,22 @@ import (
 	"sync"
 	"time"
 
+	"github.com/fystack/mpcium/internal/node/session"
 	"github.com/fystack/mpcium/pkg/config"
-	"github.com/fystack/mpcium/pkg/constant"
-	"github.com/fystack/mpcium/pkg/identity"
 	"github.com/fystack/mpcium/pkg/logger"
 	"github.com/fystack/mpcium/pkg/messaging"
 	"github.com/fystack/mpcium/pkg/mpc"
 	"github.com/fystack/mpcium/pkg/mpc/core"
-	"github.com/fystack/mpcium/pkg/session"
+	"github.com/fystack/mpcium/pkg/node"
 	"github.com/fystack/mpcium/pkg/types"
 	"github.com/nats-io/nats.go"
 )
 
 const (
-	MPCGenerateEvent  = "mpc:generate"
-	MPCSignEvent      = "mpc:signing"
-	MPCResharingEvent = "mpc:resharing"
-
 	DefaultConcurrentKeygen    = 2
 	DefaultConcurrentSigning   = 20
 	DefaultConcurrentResharing = 5
-	DefaultSessionWarmUpDelay  = 200
+	DefaultSessionWarmUpDelay  = 10
 
 	KeyGenTimeOut = 30 * time.Second
 )
@@ -44,7 +39,7 @@ type eventConsumer struct {
 	threshold     int
 	node          *mpc.Node
 	pubsub        messaging.PubSub
-	identityStore identity.Store
+	identityStore node.IdentityStore
 
 	keygenResultQueue    messaging.MessageQueue
 	signingResultQueue   messaging.MessageQueue
@@ -72,7 +67,7 @@ func NewEventConsumer(
 	keygenResultQueue messaging.MessageQueue,
 	signingResultQueue messaging.MessageQueue,
 	resharingResultQueue messaging.MessageQueue,
-	identityStore identity.Store,
+	identityStore node.IdentityStore,
 ) EventConsumer {
 	threshold := config.Threshold()
 	maxConcurrentKeygen := config.MaxConcurrentKeygen()
@@ -553,7 +548,7 @@ func (ec *eventConsumer) handleSigningSessionError(walletID, txID string, err er
 		)
 		return
 	}
-	err = ec.signingResultQueue.Enqueue(constant.SigningResultCompleteTopic, signingResultBytes, &messaging.EnqueueOptions{
+	err = ec.signingResultQueue.Enqueue(messaging.SigningResultCompleteTopic, signingResultBytes, &messaging.EnqueueOptions{
 		IdempotentKey: composeSigningResultIdempotentKey(txID, natMsg),
 	})
 	if err != nil {

@@ -7,12 +7,11 @@ import (
 	"github.com/bnb-chain/tss-lib/v2/eddsa/keygen"
 	"github.com/bnb-chain/tss-lib/v2/tss"
 	"github.com/decred/dcrd/dcrec/edwards/v2"
-	"github.com/fystack/mpcium/pkg/identity"
-	"github.com/fystack/mpcium/pkg/keyinfo"
-	"github.com/fystack/mpcium/pkg/kvstore"
 	"github.com/fystack/mpcium/pkg/logger"
 	"github.com/fystack/mpcium/pkg/messaging"
 	"github.com/fystack/mpcium/pkg/mpc/core"
+	"github.com/fystack/mpcium/pkg/node"
+	"github.com/fystack/mpcium/pkg/storage"
 )
 
 type keygenSession struct {
@@ -28,10 +27,10 @@ func NewEDDSAKeygenSession(
 	selfID *tss.PartyID,
 	partyIDs []*tss.PartyID,
 	threshold int,
-	kvstore kvstore.KVStore,
-	keyinfoStore keyinfo.Store,
+	kvStore storage.Store,
+	keyinfoStore node.KeyStore,
 	resultQueue messaging.MessageQueue,
-	identityStore identity.Store,
+	identityStore node.IdentityStore,
 ) core.KeyGenSession {
 	return &keygenSession{
 		PartySession: &core.PartySession{
@@ -45,7 +44,7 @@ func NewEDDSAKeygenSession(
 			PartyIDs:           partyIDs,
 			OutCh:              make(chan tss.Message),
 			ErrCh:              make(chan error),
-			Kvstore:            kvstore,
+			KVStore:            kvStore,
 			KeyinfoStore:       keyinfoStore,
 			TopicComposer: &core.TopicComposer{
 				ComposeBroadcastTopic: func() string {
@@ -94,14 +93,14 @@ func (s *keygenSession) GenerateKey(done func()) {
 				return
 			}
 
-			err = s.Kvstore.Put(s.ComposeKey(core.WalletIDWithVersion(s.WalletID, s.GetVersion())), keyBytes)
+			err = s.KVStore.Put(s.ComposeKey(core.WalletIDWithVersion(s.WalletID, s.GetVersion())), keyBytes)
 			if err != nil {
 				logger.Error("Failed to save key", err, "walletID", s.WalletID)
 				s.ErrCh <- err
 				return
 			}
 
-			keyInfo := keyinfo.KeyInfo{
+			keyInfo := node.KeyInfo{
 				ParticipantPeerIDs: s.ParticipantPeerIDs,
 				Threshold:          s.Threshold,
 				Version:            s.GetVersion(),

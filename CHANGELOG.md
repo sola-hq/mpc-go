@@ -64,7 +64,7 @@
 - mpc session file cleanup [View](https://github.com/fystack/mpcium/commit/cb5059b805faa3bdea3751fad189c59023521505)
 - Decode pubkey bytes, implement unit tests [View](https://github.com/fystack/mpcium/commit/2fefa4cd5fe91d73d667ed8d91df3fcd2f738a9e)
 - If don't close BadgerDB connection, it will take up 2 G.B of disk space [View](https://github.com/fystack/mpcium/commit/c22ed2e72a780340f6e3f724f9e45e8a69d66b45)
-- Implement badger kvstore to persist tss key share [View](https://github.com/fystack/mpcium/commit/3132ac5a002b59e7c4242e136eae13df9e9da66e)
+- Implement badger storage to persist tss key share [View](https://github.com/fystack/mpcium/commit/3132ac5a002b59e7c4242e136eae13df9e9da66e)
 - Generate different bitcoin address formats [View](https://github.com/fystack/mpcium/commit/88cf8acc3da0bbd71a496ecac509c6abe9c7c69c)
 - Implement wait peer ready [View](https://github.com/fystack/mpcium/commit/2fb62dd0109db1fcdeb1b4b1f77ff7c6aa5f6a4b)
 - Reuse preparams to gen key [View](https://github.com/fystack/mpcium/commit/1be1edc1f6e6219d8bfb430f6f82e8a9448dd10e)

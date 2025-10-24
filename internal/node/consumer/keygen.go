@@ -1,4 +1,4 @@
-package eventconsumer
+package consumer
 
 import (
 	"context"
@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/fystack/mpcium/pkg/constant"
 	"github.com/fystack/mpcium/pkg/logger"
 	"github.com/fystack/mpcium/pkg/messaging"
 	"github.com/fystack/mpcium/pkg/mpc"
@@ -66,7 +65,7 @@ func (kc *keygenConsumer) waitForSufficientPeers(ctx context.Context) error {
 
 	logger.Info("KeygenConsumer: Waiting for all peers to be ready before consuming messages")
 
-	ticker := time.NewTicker(readinessCheckInterval)
+	ticker := time.NewTicker(ReadinessCheckInterval)
 	defer ticker.Stop()
 
 	for {
@@ -103,8 +102,8 @@ func (kc *keygenConsumer) Run(ctx context.Context) error {
 
 	sub, err := kc.jsBroker.CreateSubscription(
 		ctx,
-		constant.KeygenConsumerStream,
-		constant.KeygenRequestTopic,
+		messaging.KeygenConsumerStream,
+		messaging.KeygenRequestTopic,
 		kc.handleKeygenEvent,
 	)
 	if err != nil {
@@ -209,7 +208,7 @@ func (kc *keygenConsumer) handleKeygenError(keygenMsg types.KeygenMessage, error
 
 	key := fmt.Sprintf(core.TypeGenerateWalletResultFmt, keygenMsg.WalletID)
 	err = kc.keygenResultQueue.Enqueue(key, keygenResultBytes, &messaging.EnqueueOptions{
-		IdempotentKey: buildIdempotentKey(keygenMsg.WalletID, sessionID, core.TypeGenerateWalletResultFmt),
+		IdempotentKey: BuildIdempotentKey(keygenMsg.WalletID, sessionID, core.TypeGenerateWalletResultFmt),
 	})
 	if err != nil {
 		logger.Error("Failed to enqueue keygen result event", err,

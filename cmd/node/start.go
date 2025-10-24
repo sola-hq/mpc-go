@@ -8,12 +8,12 @@ import (
 	"sync"
 	"syscall"
 
+	"github.com/fystack/mpcium/internal/node/consumer"
+	identity "github.com/fystack/mpcium/internal/node/identity"
+	keystore "github.com/fystack/mpcium/internal/node/keystore"
+	"github.com/fystack/mpcium/internal/node/peer"
 	"github.com/fystack/mpcium/pkg/config"
-	"github.com/fystack/mpcium/pkg/constant"
-	"github.com/fystack/mpcium/pkg/eventconsumer"
-	"github.com/fystack/mpcium/pkg/identity"
 	"github.com/fystack/mpcium/pkg/infra"
-	"github.com/fystack/mpcium/pkg/keyinfo"
 	"github.com/fystack/mpcium/pkg/logger"
 	"github.com/fystack/mpcium/pkg/messaging"
 	"github.com/fystack/mpcium/pkg/mpc"
@@ -77,7 +77,7 @@ func runNode(cmd *cobra.Command, args []string) error {
 	}
 
 	consulClient := infra.GetConsulClient(cfg.Environment)
-	keyinfoStore := keyinfo.NewStore(consulClient.KV())
+	keyinfoStore := keystore.NewConsulStore(consulClient.KV())
 	peers := LoadPeersFromConsul(consulClient)
 	nodeID := GetIDFromName(nodeName, peers)
 
@@ -103,57 +103,57 @@ func runNode(cmd *cobra.Command, args []string) error {
 	}
 
 	pubsub := messaging.NewNATSPubSub(natsConn)
-	keygenBroker, err := messaging.NewJetStreamBroker(ctx, natsConn, constant.KeygenBrokerStream, []string{
-		constant.KeygenRequestTopic,
+	keygenBroker, err := messaging.NewJetStreamBroker(ctx, natsConn, messaging.KeygenBrokerStream, []string{
+		messaging.KeygenRequestTopic,
 	})
 	if err != nil {
 		logger.Fatal("Failed to create keygen jetstream broker", err)
 	}
 
-	signingBroker, err := messaging.NewJetStreamBroker(ctx, natsConn, constant.SigningBrokerStream, []string{
-		constant.SigningRequestTopic,
+	signingBroker, err := messaging.NewJetStreamBroker(ctx, natsConn, messaging.SigningBrokerStream, []string{
+		messaging.SigningRequestTopic,
 	})
 	if err != nil {
 		logger.Fatal("Failed to create signing jetstream broker", err)
 	}
 
-	resharingBroker, err := messaging.NewJetStreamBroker(ctx, natsConn, constant.ResharingBrokerStream, []string{
-		constant.ResharingRequestTopic,
+	resharingBroker, err := messaging.NewJetStreamBroker(ctx, natsConn, messaging.ResharingBrokerStream, []string{
+		messaging.ResharingRequestTopic,
 	})
 	if err != nil {
 		logger.Fatal("Failed to create resharing jetstream broker", err)
 	}
 
 	subjects := []string{
-		constant.KeygenResultTopic,
-		constant.SigningResultTopic,
-		constant.ResharingResultTopic,
+		messaging.KeygenResultTopic,
+		messaging.SigningResultTopic,
+		messaging.ResharingResultTopic,
 	}
 
 	directMessaging := messaging.NewNatsDirectMessaging(natsConn)
 	messageQueueMgr := messaging.NewNATsMessageQueueManager(
-		constant.StreamName,
+		messaging.StreamName,
 		subjects,
 		natsConn,
 	)
 
-	genKeyResultQueue := messageQueueMgr.NewMessageQueue(constant.KeygenResultQueueName)
+	genKeyResultQueue := messageQueueMgr.NewMessageQueue(messaging.KeygenResultQueueName)
 	defer genKeyResultQueue.Close()
 
-	signingResultQueue := messageQueueMgr.NewMessageQueue(constant.SigningResultQueueName)
+	signingResultQueue := messageQueueMgr.NewMessageQueue(messaging.SigningResultQueueName)
 	defer signingResultQueue.Close()
 
-	resharingResultQueue := messageQueueMgr.NewMessageQueue(constant.ResharingResultQueueName)
+	resharingResultQueue := messageQueueMgr.NewMessageQueue(messaging.ResharingResultQueueName)
 	defer resharingResultQueue.Close()
 
 	logger.Info("Node is running", "ID", nodeID, "name", nodeName)
 
-	peerNodeIDs := GetPeerIDs(peers)
-	peerRegistry := mpc.NewRegistry(nodeID, peerNodeIDs, consulClient.KV(), directMessaging, pubsub, identityStore)
+	peerIDs := GetPeerIDs(peers)
+	peerRegistry := peer.NewRegistry(nodeID, peerIDs, consulClient.KV(), directMessaging, pubsub, identityStore)
 
 	mpcNode := mpc.NewNode(
 		nodeID,
-		peerNodeIDs,
+		peerIDs,
 		pubsub,
 		directMessaging,
 		badgerKV,
@@ -163,7 +163,7 @@ func runNode(cmd *cobra.Command, args []string) error {
 	)
 	defer mpcNode.Close()
 
-	eventConsumer := eventconsumer.NewEventConsumer(
+	eventConsumer := consumer.NewEventConsumer(
 		mpcNode,
 		pubsub,
 		genKeyResultQueue,
@@ -174,7 +174,7 @@ func runNode(cmd *cobra.Command, args []string) error {
 	eventConsumer.Run()
 	defer eventConsumer.Close()
 
-	timeoutConsumer := eventconsumer.NewTimeOutConsumer(
+	timeoutConsumer := consumer.NewTimeOutConsumer(
 		natsConn,
 		signingResultQueue,
 	)
@@ -182,9 +182,9 @@ func runNode(cmd *cobra.Command, args []string) error {
 	timeoutConsumer.Run()
 	defer timeoutConsumer.Close()
 
-	keygenConsumer := eventconsumer.NewKeygenConsumer(natsConn, keygenBroker, pubsub, peerRegistry, genKeyResultQueue)
-	signingConsumer := eventconsumer.NewSigningConsumer(natsConn, signingBroker, pubsub, peerRegistry, signingResultQueue)
-	resharingConsumer := eventconsumer.NewResharingConsumer(natsConn, resharingBroker, pubsub, peerRegistry, resharingResultQueue)
+	keygenConsumer := consumer.NewKeygenConsumer(natsConn, keygenBroker, pubsub, peerRegistry, genKeyResultQueue)
+	signingConsumer := consumer.NewSigningConsumer(natsConn, signingBroker, pubsub, peerRegistry, signingResultQueue)
+	resharingConsumer := consumer.NewResharingConsumer(natsConn, resharingBroker, pubsub, peerRegistry, resharingResultQueue)
 
 	// Make the node ready before starting the signing consumer
 	if err := peerRegistry.Ready(); err != nil {
@@ -194,6 +194,7 @@ func runNode(cmd *cobra.Command, args []string) error {
 
 	logger.Info("Starting consumers", "nodeID", nodeID)
 	appContext, cancel := context.WithCancel(context.Background())
+
 	//Setup signal handling to cancel context on termination signals.
 	go func() {
 		sigChan := make(chan os.Signal, 1)

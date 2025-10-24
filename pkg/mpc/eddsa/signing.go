@@ -11,13 +11,11 @@ import (
 	"github.com/bnb-chain/tss-lib/v2/eddsa/signing"
 	"github.com/bnb-chain/tss-lib/v2/tss"
 	"github.com/decred/dcrd/dcrec/edwards/v2"
-	"github.com/fystack/mpcium/pkg/constant"
-	"github.com/fystack/mpcium/pkg/identity"
-	"github.com/fystack/mpcium/pkg/keyinfo"
-	"github.com/fystack/mpcium/pkg/kvstore"
 	"github.com/fystack/mpcium/pkg/logger"
 	"github.com/fystack/mpcium/pkg/messaging"
 	"github.com/fystack/mpcium/pkg/mpc/core"
+	"github.com/fystack/mpcium/pkg/node"
+	"github.com/fystack/mpcium/pkg/storage"
 	"github.com/fystack/mpcium/pkg/types"
 	"github.com/samber/lo"
 )
@@ -39,10 +37,10 @@ func NewEDDSASigningSession(
 	selfID *tss.PartyID,
 	partyIDs []*tss.PartyID,
 	threshold int,
-	kvstore kvstore.KVStore,
-	keyinfoStore keyinfo.Store,
+	kvStore storage.Store,
+	keyinfoStore node.KeyStore,
 	resultQueue messaging.MessageQueue,
-	identityStore identity.Store,
+	identityStore node.IdentityStore,
 	idempotentKey string,
 ) core.SigningSession {
 	return &eddsaSigningSession{
@@ -56,7 +54,7 @@ func NewEDDSASigningSession(
 			PartyIDs:           partyIDs,
 			OutCh:              make(chan tss.Message),
 			ErrCh:              make(chan error),
-			Kvstore:            kvstore,
+			KVStore:            kvStore,
 			KeyinfoStore:       keyinfoStore,
 			TopicComposer: &core.TopicComposer{
 				ComposeBroadcastTopic: func() string {
@@ -107,22 +105,22 @@ func (s *eddsaSigningSession) Init(tx *big.Int) error {
 
 	logger.Info("Have enough participants to sign", "participants", s.ParticipantPeerIDs)
 	key := s.ComposeKey(core.WalletIDWithVersion(s.WalletID, keyInfo.Version))
-	keyData, err := s.Kvstore.Get(key)
+	keyData, err := s.KVStore.Get(key)
 	if err != nil {
-		return fmt.Errorf("Failed to get wallet data from KVStore: %w", err)
+		return fmt.Errorf("failed to get wallet data from KVStore: %w", err)
 	}
 	// Check if all the participants of the key are present
 	var data keygen.LocalPartySaveData
 	err = json.Unmarshal(keyData, &data)
 	if err != nil {
-		return fmt.Errorf("Failed to unmarshal wallet data: %w", err)
+		return fmt.Errorf("failed to unmarshal wallet data: %w", err)
 	}
 
 	s.Party = signing.NewLocalParty(tx, params, data, s.OutCh, s.endCh)
 	s.data = &data
 	s.Version = keyInfo.Version
 	s.tx = tx
-	logger.Info("Initialized sigining session successfully!")
+	logger.Info("Initialized signing session successfully!")
 	return nil
 }
 
@@ -165,7 +163,7 @@ func (s *eddsaSigningSession) Sign(onSuccess func(data []byte)) {
 				return
 			}
 
-			err = s.ResultQueue.Enqueue(constant.SigningResultCompleteTopic, bytes, &messaging.EnqueueOptions{
+			err = s.ResultQueue.Enqueue(messaging.SigningResultCompleteTopic, bytes, &messaging.EnqueueOptions{
 				IdempotentKey: s.IdempotentKey,
 			})
 			if err != nil {

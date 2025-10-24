@@ -1,4 +1,4 @@
-package kvstore
+package storage
 
 import (
 	"bytes"
@@ -21,8 +21,7 @@ import (
 )
 
 const (
-	magic            = "MPCIUM_BACKUP"
-	dbPath           = "./db"
+	magic            = "BACKUP_MAGIC"
 	defaultBackupDir = "./backups"
 )
 

@@ -4,7 +4,6 @@ import (
 	"time"
 
 	"github.com/fystack/mpcium/pkg/config"
-	"github.com/fystack/mpcium/pkg/constant"
 	"github.com/fystack/mpcium/pkg/logger"
 	"github.com/hashicorp/consul/api"
 )
@@ -24,40 +23,40 @@ func GetConsulConfig() *api.Config {
 		consulCfg = cfg.Consul
 	}
 
-	config := api.DefaultConfig()
-	if environment == constant.EnvProduction {
-		config.Token = consulCfg.Token
+	clientConfig := api.DefaultConfig()
+	if environment == config.Production {
+		clientConfig.Token = consulCfg.Token
 		username := consulCfg.Username
 		password := consulCfg.Password
 		if username != "" || password != "" {
-			config.HttpAuth = &api.HttpBasicAuth{
+			clientConfig.HttpAuth = &api.HttpBasicAuth{
 				Username: username,
 				Password: password,
 			}
 		}
 	}
 
-	config.Address = consulCfg.Address
-	if config.Address == "" {
-		config.Address = api.DefaultConfig().Address
+	clientConfig.Address = consulCfg.Address
+	if clientConfig.Address == "" {
+		clientConfig.Address = api.DefaultConfig().Address
 	}
-	return config
+	return clientConfig
 }
 
 func GetConsulClient(environment string) *api.Client {
-	config := GetConsulConfig()
-	config.WaitTime = 10 * time.Second
+	cfg := GetConsulConfig()
+	cfg.WaitTime = 10 * time.Second
 
 	logger.Info("Consul config",
 		"environment", environment,
-		"address", config.Address,
-		"wait_time", config.WaitTime,
-		"token_length", len(config.Token),
-		"http_auth", config.HttpAuth,
+		"address", cfg.Address,
+		"wait_time", cfg.WaitTime,
+		"token_length", len(cfg.Token),
+		"http_auth", cfg.HttpAuth,
 	)
 
 	// Ping the Consul server to verify connectivity
-	client, err := api.NewClient(config)
+	client, err := api.NewClient(cfg)
 	if err != nil {
 		logger.Fatal("Failed to create consul client", err)
 	}

@@ -6,7 +6,6 @@ import (
 	"fmt"
 
 	"github.com/fystack/mpcium/pkg/client/signer"
-	"github.com/fystack/mpcium/pkg/constant"
 	"github.com/fystack/mpcium/pkg/logger"
 	"github.com/fystack/mpcium/pkg/messaging"
 	"github.com/fystack/mpcium/pkg/types"
@@ -45,8 +44,8 @@ func NewMPCClient(opts Options) types.Initiator {
 	signingBroker, err := messaging.NewJetStreamBroker(
 		context.Background(),
 		opts.NatsConn,
-		constant.SigningBrokerStream,
-		[]string{constant.SigningRequestTopic},
+		messaging.SigningBrokerStream,
+		[]string{messaging.SigningRequestTopic},
 	)
 	if err != nil {
 		logger.Fatal("Failed to create signing jetstream broker", err)
@@ -55,8 +54,8 @@ func NewMPCClient(opts Options) types.Initiator {
 	keygenBroker, err := messaging.NewJetStreamBroker(
 		context.Background(),
 		opts.NatsConn,
-		constant.KeygenBrokerStream,
-		[]string{constant.KeygenRequestTopic},
+		messaging.KeygenBrokerStream,
+		[]string{messaging.KeygenRequestTopic},
 	)
 	if err != nil {
 		logger.Fatal("Failed to create keygen jetstream broker", err)
@@ -65,24 +64,24 @@ func NewMPCClient(opts Options) types.Initiator {
 	resharingBroker, err := messaging.NewJetStreamBroker(
 		context.Background(),
 		opts.NatsConn,
-		constant.ResharingBrokerStream,
-		[]string{constant.ResharingRequestTopic},
+		messaging.ResharingBrokerStream,
+		[]string{messaging.ResharingRequestTopic},
 	)
 	if err != nil {
 		logger.Fatal("Failed to create resharing jetstream broker", err)
 	}
 
 	subjects := []string{
-		constant.KeygenResultTopic,
-		constant.SigningResultTopic,
-		constant.ResharingResultTopic,
+		messaging.KeygenResultTopic,
+		messaging.SigningResultTopic,
+		messaging.ResharingResultTopic,
 	}
 
-	messageQueueMgr := messaging.NewNATsMessageQueueManager(constant.StreamName, subjects, opts.NatsConn)
+	messageQueueMgr := messaging.NewNATsMessageQueueManager(messaging.StreamName, subjects, opts.NatsConn)
 
-	keygenResultQueue := messageQueueMgr.NewMessageQueue(constant.KeygenResultQueueName)
-	signingResultQueue := messageQueueMgr.NewMessageQueue(constant.SigningResultQueueName)
-	resharingResultQueue := messageQueueMgr.NewMessageQueue(constant.ResharingResultQueueName)
+	keygenResultQueue := messageQueueMgr.NewMessageQueue(messaging.KeygenResultQueueName)
+	signingResultQueue := messageQueueMgr.NewMessageQueue(messaging.SigningResultQueueName)
+	resharingResultQueue := messageQueueMgr.NewMessageQueue(messaging.ResharingResultQueueName)
 
 	return &initiator{
 		signingBroker:   signingBroker,
@@ -119,7 +118,7 @@ func (c *initiator) CreateWallet(walletID string) error {
 		return fmt.Errorf("CreateWallet: marshal error: %w", err)
 	}
 
-	topic := constant.FormatKeygenRequestTopic(walletID)
+	topic := messaging.FormatKeygenRequestTopic(walletID)
 	if err := c.keygenBroker.PublishMessage(context.Background(), topic, bytes); err != nil {
 		return fmt.Errorf("CreateWallet: publish error: %w", err)
 	}
@@ -128,7 +127,7 @@ func (c *initiator) CreateWallet(walletID string) error {
 
 // The callback will be invoked whenever a wallet creation result is received.
 func (c *initiator) OnWalletCreationResult(callback func(event types.KeygenResponse)) error {
-	err := c.keygenResultQueue.Dequeue(constant.KeygenResultTopic, func(msg []byte) error {
+	err := c.keygenResultQueue.Dequeue(messaging.KeygenResultTopic, func(msg []byte) error {
 		var event types.KeygenResponse
 		err := json.Unmarshal(msg, &event)
 		if err != nil {
@@ -163,7 +162,7 @@ func (c *initiator) SignTransaction(msg *types.SigningMessage) error {
 		return fmt.Errorf("SignTransaction: marshal error: %w", err)
 	}
 
-	topic := constant.FormatSigningRequestTopic(msg.TxID)
+	topic := messaging.FormatSigningRequestTopic(msg.TxID)
 	if err := c.signingBroker.PublishMessage(context.Background(), topic, bytes); err != nil {
 		return fmt.Errorf("SignTransaction: publish error: %w", err)
 	}
@@ -171,7 +170,7 @@ func (c *initiator) SignTransaction(msg *types.SigningMessage) error {
 }
 
 func (c *initiator) OnSignResult(callback func(event types.SigningResponse)) error {
-	err := c.signingResultQueue.Dequeue(constant.SigningResultCompleteTopic, func(msg []byte) error {
+	err := c.signingResultQueue.Dequeue(messaging.SigningResultCompleteTopic, func(msg []byte) error {
 		var event types.SigningResponse
 		err := json.Unmarshal(msg, &event)
 		if err != nil {
@@ -205,7 +204,7 @@ func (c *initiator) Resharing(msg *types.ResharingMessage) error {
 		return fmt.Errorf("Resharing: marshal error: %w", err)
 	}
 
-	topic := constant.FormatResharingRequestTopic(msg.WalletID)
+	topic := messaging.FormatResharingRequestTopic(msg.WalletID)
 	if err := c.resharingBroker.PublishMessage(context.Background(), topic, bytes); err != nil {
 		return fmt.Errorf("Resharing: publish error: %w", err)
 	}
@@ -214,7 +213,7 @@ func (c *initiator) Resharing(msg *types.ResharingMessage) error {
 
 func (c *initiator) OnResharingResult(callback func(event types.ResharingResponse)) error {
 
-	err := c.resharingResultQueue.Dequeue(constant.ResharingResultTopic, func(msg []byte) error {
+	err := c.resharingResultQueue.Dequeue(messaging.ResharingResultTopic, func(msg []byte) error {
 		logger.Debug("Received resharing response", "raw", string(msg))
 		var event types.ResharingResponse
 		err := json.Unmarshal(msg, &event)

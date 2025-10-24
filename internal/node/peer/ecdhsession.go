@@ -1,4 +1,4 @@
-package mpc
+package peer
 
 import (
 	"crypto/ecdh"
@@ -10,9 +10,9 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/fystack/mpcium/pkg/identity"
 	"github.com/fystack/mpcium/pkg/logger"
 	"github.com/fystack/mpcium/pkg/messaging"
+	"github.com/fystack/mpcium/pkg/node"
 	"github.com/fystack/mpcium/pkg/types"
 
 	"encoding/json"
@@ -42,7 +42,7 @@ type ecdhSession struct {
 	peerIDs       []string
 	pubSub        messaging.PubSub
 	ecdhSub       messaging.Subscription
-	identityStore identity.Store
+	identityStore node.IdentityStore
 	privateKey    *ecdh.PrivateKey
 	publicKey     *ecdh.PublicKey
 	errCh         chan error
@@ -52,7 +52,7 @@ func NewECDHSession(
 	nodeID string,
 	peerIDs []string,
 	pubSub messaging.PubSub,
-	identityStore identity.Store,
+	identityStore node.IdentityStore,
 ) *ecdhSession {
 	return &ecdhSession{
 		nodeID:        nodeID,

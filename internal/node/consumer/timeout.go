@@ -1,10 +1,9 @@
-package eventconsumer
+package consumer
 
 import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/fystack/mpcium/pkg/constant"
 	"github.com/fystack/mpcium/pkg/logger"
 	"github.com/fystack/mpcium/pkg/messaging"
 	"github.com/fystack/mpcium/pkg/types"
@@ -48,7 +47,7 @@ func (h *SigningStreamHandler) HandleTimeout(stream string, streamSeq uint64, da
 	}
 
 	err = h.messageQueue.Enqueue(
-		constant.SigningResultTopic,
+		messaging.SigningResultTopic,
 		signResponseBytes,
 		&messaging.EnqueueOptions{
 			IdempotentKey: signResponse.TxID,
@@ -81,7 +80,7 @@ func (h *ResharingStreamHandler) HandleTimeout(stream string, streamSeq uint64, 
 		return
 	}
 
-	err = h.messageQueue.Enqueue(constant.ResharingResultTopic, resharingResponseBytes, &messaging.EnqueueOptions{
+	err = h.messageQueue.Enqueue(messaging.ResharingResultTopic, resharingResponseBytes, &messaging.EnqueueOptions{
 		IdempotentKey: resharingResponse.WalletID,
 	})
 	if err != nil {
@@ -111,7 +110,7 @@ func (h *KeygenStreamHandler) HandleTimeout(stream string, streamSeq uint64, dat
 	}
 
 	err = h.messageQueue.Enqueue(
-		constant.KeygenResultTopic,
+		messaging.KeygenResultTopic,
 		keygenResponseBytes,
 		&messaging.EnqueueOptions{
 			IdempotentKey: keygenResponse.WalletID,
@@ -135,13 +134,13 @@ type timeOutConsumer struct {
 // NewTimeOutConsumer creates a new timeout consumer
 func NewTimeOutConsumer(natsConn *nats.Conn, messageQueue messaging.MessageQueue) *timeOutConsumer {
 	handlers := map[string]StreamHandler{
-		constant.SigningBrokerStream: &SigningStreamHandler{
+		messaging.SigningBrokerStream: &SigningStreamHandler{
 			messageQueue: messageQueue,
 		},
-		constant.ResharingBrokerStream: &ResharingStreamHandler{
+		messaging.ResharingBrokerStream: &ResharingStreamHandler{
 			messageQueue: messageQueue,
 		},
-		constant.KeygenBrokerStream: &KeygenStreamHandler{
+		messaging.KeygenBrokerStream: &KeygenStreamHandler{
 			messageQueue: messageQueue,
 		},
 	}

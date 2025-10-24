@@ -10,11 +10,10 @@ import (
 
 	"github.com/bnb-chain/tss-lib/v2/ecdsa/keygen"
 	"github.com/bnb-chain/tss-lib/v2/tss"
-	"github.com/fystack/mpcium/pkg/identity"
-	"github.com/fystack/mpcium/pkg/keyinfo"
-	"github.com/fystack/mpcium/pkg/kvstore"
 	"github.com/fystack/mpcium/pkg/logger"
 	"github.com/fystack/mpcium/pkg/messaging"
+	"github.com/fystack/mpcium/pkg/node"
+	"github.com/fystack/mpcium/pkg/storage"
 	"github.com/fystack/mpcium/pkg/types"
 	"github.com/nats-io/nats.go"
 )
@@ -34,8 +33,8 @@ const (
 )
 
 var (
-	ErrNotEnoughParticipants = errors.New("Not enough participants to sign")
-	ErrNotInParticipantList  = errors.New("Node is not in the participant list")
+	ErrNotEnoughParticipants = errors.New("not enough participants to sign")
+	ErrNotInParticipantList  = errors.New("node is not in the participant list")
 )
 
 type TopicComposer struct {
@@ -93,13 +92,13 @@ type PartySession struct {
 
 	// PreParams is nil for EDDSA session
 	PreParams    *keygen.LocalPreParams
-	Kvstore      kvstore.KVStore
-	KeyinfoStore keyinfo.Store
+	KVStore      storage.Store
+	KeyinfoStore node.KeyStore
 	BroadcastSub messaging.Subscription
 	DirectSubs   []messaging.Subscription
 
 	ResultQueue   messaging.MessageQueue
-	IdentityStore identity.Store
+	IdentityStore node.IdentityStore
 
 	TopicComposer *TopicComposer
 	ComposeKey    KeyComposerFn
@@ -124,8 +123,8 @@ func (s *PartySession) GetPartyCount() int {
 }
 
 // update: use AEAD encryption for each message so NATs server learns nothing
-func (s *PartySession) HandleTssMessage(keyshare tss.Message) {
-	data, routing, err := keyshare.WireBytes()
+func (s *PartySession) HandleTssMessage(btssMsg tss.Message) {
+	data, routing, err := btssMsg.WireBytes()
 	if err != nil {
 		s.ErrCh <- err
 		return
@@ -254,7 +253,7 @@ func (s *PartySession) receiveTssMessage(msg *types.TssMessage) {
 
 	round, err := s.GetRoundFunc(msg.MsgBytes, s.SelfPartyID, msg.IsBroadcast)
 	if err != nil {
-		s.ErrCh <- fmt.Errorf("Broken TSS Share: %w", err)
+		s.ErrCh <- fmt.Errorf("broken tss share: %w", err)
 		return
 	}
 	logger.Debug(
@@ -367,7 +366,7 @@ func (s *PartySession) GetVersion() int {
 	return s.Version
 }
 
-// LoadOldShareDataGeneric loads the old share data from kvstore with backward compatibility (versioned and unversioned keys)
+// LoadOldShareDataGeneric loads the old share data from storage with backward compatibility (versioned and unversioned keys)
 func (s *PartySession) LoadOldShareDataGeneric(walletID string, version int, dest interface{}) error {
 	var (
 		key     string
@@ -378,7 +377,7 @@ func (s *PartySession) LoadOldShareDataGeneric(walletID string, version int, des
 	// Try versioned key first if version > 0
 	if version > 0 {
 		key = s.ComposeKey(WalletIDWithVersion(walletID, version))
-		keyData, err = s.Kvstore.Get(key)
+		keyData, err = s.KVStore.Get(key)
 		if err != nil {
 			return err
 		}
@@ -387,7 +386,7 @@ func (s *PartySession) LoadOldShareDataGeneric(walletID string, version int, des
 	// If version == 0 or previous key not found, fall back to unversioned key
 	if version == 0 {
 		key = s.ComposeKey(walletID)
-		keyData, err = s.Kvstore.Get(key)
+		keyData, err = s.KVStore.Get(key)
 		if err != nil {
 			return err
 		}
@@ -403,7 +402,7 @@ func (s *PartySession) LoadOldShareDataGeneric(walletID string, version int, des
 	return nil
 }
 
-// WalletIDWithVersion is used to compose the key for the kvstore
+// WalletIDWithVersion is used to compose the key for the KVStore
 func WalletIDWithVersion(walletID string, version int) string {
 	if version > 0 {
 		return fmt.Sprintf("%s_v%d", walletID, version)

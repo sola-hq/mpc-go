@@ -1,7 +1,7 @@
-package kvstore
+package storage
 
-// KVStore defines the interface for a key-value store.
-type KVStore interface {
+// Store defines the contract for a node's persistence layer.
+type Store interface {
 	// Put stores a key-value pair in the store.
 	Put(key string, value []byte) error
 

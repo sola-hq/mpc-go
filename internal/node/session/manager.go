@@ -15,8 +15,8 @@ func GetSessionID(walletID, txID string) string {
 
 // Manager is the session manager
 type Manager struct {
-	activeSessions  map[string]time.Time // Maps "walletID-txID" to creation time
-	sessionsLock    sync.RWMutex
+	sessions        map[string]time.Time // Maps "walletID-txID" to creation time
+	mu              sync.RWMutex
 	cleanupInterval time.Duration // How often to run cleanup
 	sessionTimeout  time.Duration // How long before a session is considered stale
 	stopChan        chan struct{} // Signal to stop session cleanup routine
@@ -25,7 +25,7 @@ type Manager struct {
 // NewManager creates a new session manager
 func NewManager(cleanupInterval, sessionTimeout time.Duration) *Manager {
 	return &Manager{
-		activeSessions:  make(map[string]time.Time),
+		sessions:        make(map[string]time.Time),
 		cleanupInterval: cleanupInterval,
 		sessionTimeout:  sessionTimeout,
 		stopChan:        make(chan struct{}),
@@ -35,10 +35,10 @@ func NewManager(cleanupInterval, sessionTimeout time.Duration) *Manager {
 // AddSession adds a session
 func (m *Manager) AddSession(walletID, txID string) {
 	sessionID := GetSessionID(walletID, txID)
-	m.sessionsLock.Lock()
-	defer m.sessionsLock.Unlock()
+	m.mu.Lock()
+	defer m.mu.Unlock()
 
-	m.activeSessions[sessionID] = time.Now()
+	m.sessions[sessionID] = time.Now()
 	logger.Debug("Session added", "sessionID", sessionID)
 }
 
@@ -46,9 +46,9 @@ func (m *Manager) AddSession(walletID, txID string) {
 func (m *Manager) HasSession(walletID, txID string) bool {
 	sessionID := GetSessionID(walletID, txID)
 
-	m.sessionsLock.RLock()
-	_, exists := m.activeSessions[sessionID]
-	m.sessionsLock.RUnlock()
+	m.mu.RLock()
+	_, exists := m.sessions[sessionID]
+	m.mu.RUnlock()
 
 	if exists {
 		logger.Info("Session already exists", "walletID", walletID, "txID", txID)
@@ -86,13 +86,13 @@ func (m *Manager) Stop() {
 // cleanupStaleSessions cleans up stale sessions
 func (m *Manager) cleanupStaleSessions() {
 	now := time.Now()
-	m.sessionsLock.Lock()
-	defer m.sessionsLock.Unlock()
+	m.mu.Lock()
+	defer m.mu.Unlock()
 
 	cleanedCount := 0
-	for sessionID, creationTime := range m.activeSessions {
+	for sessionID, creationTime := range m.sessions {
 		if now.Sub(creationTime) > m.sessionTimeout {
-			delete(m.activeSessions, sessionID)
+			delete(m.sessions, sessionID)
 			cleanedCount++
 		}
 	}
@@ -100,23 +100,23 @@ func (m *Manager) cleanupStaleSessions() {
 	if cleanedCount > 0 {
 		logger.Info("Cleaned up stale sessions",
 			"cleanedCount", cleanedCount,
-			"remainingCount", len(m.activeSessions))
+			"remainingCount", len(m.sessions))
 	}
 }
 
 // GetActiveSessionCount gets the number of active sessions
 func (m *Manager) GetActiveSessionCount() int {
-	m.sessionsLock.RLock()
-	defer m.sessionsLock.RUnlock()
-	return len(m.activeSessions)
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return len(m.sessions)
 }
 
 // GetActiveSessions gets all active sessions (for debugging)
 func (m *Manager) GetActiveSessions() map[string]time.Time {
-	m.sessionsLock.RLock()
-	defer m.sessionsLock.RUnlock()
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 	// return a copy to avoid external modification
 	sessions := make(map[string]time.Time)
-	maps.Copy(sessions, m.activeSessions)
+	maps.Copy(sessions, m.sessions)
 	return sessions
 }

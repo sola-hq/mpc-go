@@ -8,12 +8,11 @@ import (
 	"github.com/bnb-chain/tss-lib/v2/eddsa/resharing"
 	"github.com/bnb-chain/tss-lib/v2/tss"
 	"github.com/decred/dcrd/dcrec/edwards/v2"
-	"github.com/fystack/mpcium/pkg/identity"
-	"github.com/fystack/mpcium/pkg/keyinfo"
-	"github.com/fystack/mpcium/pkg/kvstore"
 	"github.com/fystack/mpcium/pkg/logger"
 	"github.com/fystack/mpcium/pkg/messaging"
 	"github.com/fystack/mpcium/pkg/mpc/core"
+	"github.com/fystack/mpcium/pkg/node"
+	"github.com/fystack/mpcium/pkg/storage"
 )
 
 type resharingSession struct {
@@ -35,10 +34,10 @@ func NewEDDSAResharingSession(
 	newPartyIDs []*tss.PartyID,
 	threshold int,
 	newThreshold int,
-	kvstore kvstore.KVStore,
-	keyinfoStore keyinfo.Store,
+	kvStore storage.Store,
+	keyinfoStore node.KeyStore,
 	resultQueue messaging.MessageQueue,
-	identityStore identity.Store,
+	identityStore node.IdentityStore,
 	newPeerIDs []string,
 	isNewParty bool,
 	version int,
@@ -60,7 +59,7 @@ func NewEDDSAResharingSession(
 		PartyIDs:           realPartyIDs,
 		OutCh:              make(chan tss.Message),
 		ErrCh:              make(chan error),
-		Kvstore:            kvstore,
+		KVStore:            kvStore,
 		KeyinfoStore:       keyinfoStore,
 		TopicComposer: &core.TopicComposer{
 			ComposeBroadcastTopic: func() string {
@@ -166,12 +165,12 @@ func (s *resharingSession) Reshare(done func()) {
 
 				newVersion := s.GetVersion() + 1
 				key := s.ComposeKey(core.WalletIDWithVersion(s.WalletID, newVersion))
-				if err := s.Kvstore.Put(key, keyBytes); err != nil {
+				if err := s.KVStore.Put(key, keyBytes); err != nil {
 					s.ErrCh <- err
 					return
 				}
 
-				keyInfo := keyinfo.KeyInfo{
+				keyInfo := node.KeyInfo{
 					ParticipantPeerIDs: s.newPeerIDs,
 					Threshold:          s.resharingParams.NewThreshold(),
 					Version:            newVersion,

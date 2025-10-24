@@ -5,7 +5,7 @@ import (
 	"os"
 	"syscall"
 
-	"github.com/fystack/mpcium/pkg/kvstore"
+	"github.com/fystack/mpcium/pkg/storage"
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 )
@@ -84,7 +84,7 @@ func recoverDatabase(cmd *cobra.Command, args []string) error {
 	fmt.Printf("Recovery path: %s\n", recoveryPath)
 
 	// Create a temporary backup executor to access the backup files
-	tempExecutor := kvstore.NewBadgerBackupExecutor("temp", nil, key, backupDir)
+	tempExecutor := storage.NewBadgerBackupExecutor("temp", nil, key, backupDir)
 
 	// Perform the recovery using the existing method with specified recovery path
 	if err := tempExecutor.RestoreAllBackupsEncrypted(recoveryPath, key); err != nil {

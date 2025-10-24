@@ -1,12 +1,14 @@
 module github.com/fystack/mpcium/e2e
 
-go 1.23.8
+go 1.25.0
+
+toolchain go1.25.3
 
 require (
 	github.com/dgraph-io/badger/v4 v4.7.0
 	github.com/fystack/mpcium v0.0.0-00010101000000-000000000000
 	github.com/google/uuid v1.6.0
-	github.com/hashicorp/consul/api v1.32.1
+	github.com/hashicorp/consul/api v1.32.4
 	github.com/nats-io/nats.go v1.31.0
 	github.com/stretchr/testify v1.11.1
 	gopkg.in/yaml.v2 v2.4.0
@@ -61,7 +63,6 @@ require (
 	github.com/mattn/go-colorable v0.1.14 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/mitchellh/go-homedir v1.1.0 // indirect
-	github.com/mitchellh/mapstructure v1.5.0 // indirect
 	github.com/nats-io/nkeys v0.4.6 // indirect
 	github.com/nats-io/nuid v1.0.1 // indirect
 	github.com/opentracing/opentracing-go v1.2.0 // indirect
@@ -84,10 +85,10 @@ require (
 	go.uber.org/multierr v1.9.0 // indirect
 	go.uber.org/zap v1.21.0 // indirect
 	go.yaml.in/yaml/v3 v3.0.4 // indirect
-	golang.org/x/crypto v0.37.0 // indirect
-	golang.org/x/exp v0.0.0-20250305212735-054e65f0b394 // indirect
-	golang.org/x/net v0.39.0 // indirect
-	golang.org/x/sys v0.33.0 // indirect
+	golang.org/x/crypto v0.41.0 // indirect
+	golang.org/x/exp v0.0.0-20250808145144-a408d31f581a // indirect
+	golang.org/x/net v0.43.0 // indirect
+	golang.org/x/sys v0.35.0 // indirect
 	golang.org/x/text v0.28.0 // indirect
 	google.golang.org/protobuf v1.36.6 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
