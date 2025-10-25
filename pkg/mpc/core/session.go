@@ -92,7 +92,7 @@ type PartySession struct {
 
 	// PreParams is nil for EDDSA session
 	PreParams    *keygen.LocalPreParams
-	KVStore      storage.Store
+	KVStore      storage.Storage
 	KeyinfoStore node.KeyStore
 	BroadcastSub messaging.Subscription
 	DirectSubs   []messaging.Subscription

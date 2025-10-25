@@ -8,7 +8,7 @@ import (
 	"github.com/fystack/mpcium/pkg/logger"
 )
 
-func NewKVStore(nodeName, nodeID string) Store {
+func NewKVStore(nodeName, nodeID string) Storage {
 	cfg := config.GetConfig()
 	switch cfg.StorageType {
 	case config.StorageTypePostgres:

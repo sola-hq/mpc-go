@@ -1,7 +1,7 @@
 package storage
 
-// Store defines the contract for a node's persistence layer.
-type Store interface {
+// Storage defines the contract for a node's persistence layer.
+type Storage interface {
 	// Put stores a key-value pair in the store.
 	Put(key string, value []byte) error
 

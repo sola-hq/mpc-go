@@ -36,7 +36,7 @@ type Node struct {
 	preParams    []*keygen.LocalPreParams
 	pubSub       messaging.PubSub
 	direct       messaging.DirectMessaging
-	KVstore      storage.Store
+	KVstore      storage.Storage
 	keyinfoStore node.KeyStore
 
 	identityStore node.IdentityStore
@@ -49,7 +49,7 @@ func NewNode(
 	peerIDs []string,
 	pubSub messaging.PubSub,
 	direct messaging.DirectMessaging,
-	KVstore storage.Store,
+	KVstore storage.Storage,
 	keyinfoStore node.KeyStore,
 	peerRegistry PeerRegistry,
 	identityStore node.IdentityStore,

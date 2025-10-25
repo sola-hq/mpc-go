@@ -39,7 +39,7 @@ func NewECDSASigningSession(
 	partyIDs []*tss.PartyID,
 	threshold int,
 	preParams *keygen.LocalPreParams,
-	kvStore storage.Store,
+	kvStore storage.Storage,
 	keyinfoStore node.KeyStore,
 	resultQueue messaging.MessageQueue,
 	identityStore node.IdentityStore,

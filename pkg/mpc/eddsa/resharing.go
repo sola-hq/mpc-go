@@ -34,7 +34,7 @@ func NewEDDSAResharingSession(
 	newPartyIDs []*tss.PartyID,
 	threshold int,
 	newThreshold int,
-	kvStore storage.Store,
+	kvStore storage.Storage,
 	keyinfoStore node.KeyStore,
 	resultQueue messaging.MessageQueue,
 	identityStore node.IdentityStore,

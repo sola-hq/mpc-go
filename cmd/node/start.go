@@ -92,7 +92,7 @@ func runNode(cmd *cobra.Command, args []string) error {
 	defer kvStore.Close()
 
 	if cfg.BackupEnabled {
-		if badgerStore, ok := kvStore.(*storage.BadgerStore); ok {
+		if badgerStore, ok := kvStore.(*storage.BadgerKVStore); ok {
 			backupPeriodSeconds := cfg.BackupPeriodSeconds
 			stopBackup := StartPeriodicBackup(ctx, badgerStore, backupPeriodSeconds)
 			defer stopBackup()

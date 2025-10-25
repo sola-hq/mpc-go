@@ -12,7 +12,7 @@ const (
 	DefaultBackupPeriodSeconds = 300 // (5 minutes)
 )
 
-func StartPeriodicBackup(ctx context.Context, badgerKV *storage.BadgerStore, periodSeconds int) func() {
+func StartPeriodicBackup(ctx context.Context, badgerKV *storage.BadgerKVStore, periodSeconds int) func() {
 	if periodSeconds <= 0 {
 		periodSeconds = DefaultBackupPeriodSeconds
 	}

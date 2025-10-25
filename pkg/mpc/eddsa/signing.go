@@ -37,7 +37,7 @@ func NewEDDSASigningSession(
 	selfID *tss.PartyID,
 	partyIDs []*tss.PartyID,
 	threshold int,
-	kvStore storage.Store,
+	kvStore storage.Storage,
 	keyinfoStore node.KeyStore,
 	resultQueue messaging.MessageQueue,
 	identityStore node.IdentityStore,

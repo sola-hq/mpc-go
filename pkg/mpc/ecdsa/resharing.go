@@ -36,7 +36,7 @@ func NewECDSAResharingSession(
 	threshold int,
 	newThreshold int,
 	preParams *keygen.LocalPreParams,
-	kvStore storage.Store,
+	kvStore storage.Storage,
 	keyinfoStore node.KeyStore,
 	resultQueue messaging.MessageQueue,
 	identityStore node.IdentityStore,
