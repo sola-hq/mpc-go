@@ -39,6 +39,11 @@ func loadPasswordFromFile(cfg *config.Config, filePath string) error {
 
 // Prompt user for sensitive configuration values
 func promptForSensitiveCredentials(cfg *config.Config) {
+	if cfg.StorageType != config.StorageTypeBadger {
+		checkRequiredConfigValues(cfg)
+		return
+	}
+
 	fmt.Println("WARNING: Please back up your Badger DB password in a secure location.")
 	fmt.Println("If you lose this password, you will permanently lose access to your data!")
 
@@ -90,6 +95,7 @@ func promptForSensitiveCredentials(cfg *config.Config) {
 		cfg.BadgerPassword = passwordStr
 	}
 	security.ZeroString(&passwordStr)
+	checkRequiredConfigValues(cfg)
 }
 
 // maskString shows the first and last character of a string, replacing the middle with asterisks
@@ -109,12 +115,19 @@ func maskString(s string) string {
 
 // Check required configuration values are present
 func checkRequiredConfigValues(cfg *config.Config) {
-	// Show warning if we're using file-based config but no password is set
-	if cfg.BadgerPassword == "" {
-		logger.Fatal("Badger password is required", nil)
-	}
 
 	if cfg.EventInitiatorPubKey == "" {
 		logger.Fatal("Event initiator public key is required", nil)
+	}
+
+	switch cfg.StorageType {
+	case config.StorageTypeBadger:
+		if config.BadgerPassword() == "" {
+			logger.Fatal("Badger password is required", nil)
+		}
+	case config.StorageTypePostgres:
+		if cfg.PostgresDSN == "" {
+			logger.Fatal("Postgres DSN is required", nil)
+		}
 	}
 }

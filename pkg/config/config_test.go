@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -38,6 +39,7 @@ func TestConfig_ApplyDefaults(t *testing.T) {
 	applyDefaults(config)
 
 	assert.Equal(t, Development, config.Environment)
+	assert.Equal(t, StorageTypeBadger, config.StorageType)
 	assert.Equal(t, defaultBadgerDBPath, config.DBPath)
 	assert.Equal(t, defaultBackupDir, config.BackupDir)
 	assert.Equal(t, defaultBackupPeriodSeconds, config.BackupPeriodSeconds)
@@ -47,14 +49,22 @@ func TestConfig_ApplyDefaults(t *testing.T) {
 	assert.Equal(t, defaultSessionWarmUpDelayMs, config.SessionWarmUpDelayMillis)
 	assert.Equal(t, defaultThreshold, config.Threshold)
 	assert.Equal(t, defaultInitiatorAlgorithm, config.EventInitiatorAlgorithm)
+	assert.Equal(t, defaultPostgresMaxIdleConns, config.PostgresMaxIdleConns)
+	assert.Equal(t, defaultPostgresMaxOpenConns, config.PostgresMaxOpenConns)
 }
 
 func TestConfig_ApplyDefaults_WithExistingValues(t *testing.T) {
 	config := &Config{
-		Environment: "production",
-		DBPath:      "/custom/path",
-		Threshold:   3,
+		Environment:             "production",
+		DBPath:                  "/custom/path",
+		Threshold:               3,
+		StorageType:             StorageTypePostgres,
+		PostgresDSN:             "postgres://example",
+		PostgresMaxIdleConns:    8,
+		PostgresMaxOpenConns:    10,
+		PostgresConnMaxLifetime: 30 * time.Minute,
 	}
+
 	applyDefaults(config)
 
 	// Should not override existing values
@@ -65,6 +75,9 @@ func TestConfig_ApplyDefaults_WithExistingValues(t *testing.T) {
 	// Should apply defaults for empty values
 	assert.Equal(t, defaultBackupDir, config.BackupDir)
 	assert.Equal(t, defaultMaxConcurrentKeygen, config.MaxConcurrentKeygen)
+	assert.Equal(t, "postgres://example", config.PostgresDSN)
+	assert.Equal(t, 8, config.PostgresMaxIdleConns)
+	assert.Equal(t, defaultPostgresMaxOpenConns, config.PostgresMaxOpenConns)
 }
 
 func TestValidateEnvironment(t *testing.T) {
@@ -136,6 +149,11 @@ func TestConfigAccessFunctions(t *testing.T) {
 		BackupEnabled:            true,
 		BackupPeriodSeconds:      600,
 		BackupDir:                "/test/backup",
+		StorageType:              StorageTypePostgres,
+		PostgresDSN:              "postgres://example",
+		PostgresMaxIdleConns:     9,
+		PostgresMaxOpenConns:     10,
+		PostgresConnMaxLifetime:  30 * time.Minute,
 	}
 
 	// Set the global config
@@ -154,6 +172,7 @@ func TestConfigAccessFunctions(t *testing.T) {
 	assert.Equal(t, true, BackupEnabled())
 	assert.Equal(t, 600, BackupPeriodSeconds())
 	assert.Equal(t, "/test/backup", BackupDir())
+	assert.Equal(t, StorageTypePostgres, StorageType())
 }
 
 func TestSetBadgerPassword(t *testing.T) {

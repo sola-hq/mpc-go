@@ -147,6 +147,9 @@ Edit `/etc/mpc/config.yaml` to include:
 - NATS server connection details and credentials
 - Consul service discovery configuration
 - MPC threshold settings (`threshold`)
+- Storage selection (`storage_type`) and backend credentials:
+  - `badger` (default): ensure systemd credential file or prompt provides the Badger password
+  - `postgres`: populate the `postgres` block with your production DSN and pooling values
 - Event initiator public key (will be updated in Step 5)
 
 #### Step 6: Generate Event Initiator Key
@@ -174,14 +177,20 @@ mpc-cli identity generate --node node0 --encrypt
 
 #### Step 8: Generate TLS Certificates
 
-#### Step 9: Configure Database Encryption
+#### Step 9: Configure Storage Credentials
 
-```bash
-cd ~/mpc/deployments
-./setup-mpc-cred.sh
-# Enter BadgerDB password when prompted
-# ⚠️ IMPORTANT: Backup password to secure storage (e.g., Bitwarden)
-```
+- **Badger (default)**  
+  ```bash
+  cd ~/mpc/deployments
+  ./setup-mpc-cred.sh
+  # Enter BadgerDB password when prompted
+  # ⚠️ IMPORTANT: Backup password to secure storage (e.g., Bitwarden)
+  ```
+- **PostgreSQL**  
+  - Make sure the `postgres.dsn` in `/etc/mpc/config.yaml` points to a reachable cluster (e.g. `postgres://mpc_user:strong-pass@db.example.com:6432/mpc?sslmode=require`)
+  - Create the target database/schema ahead of time
+  - Grant the service account `INSERT`, `UPDATE`, `SELECT`, and `DELETE` on the `kv_entries` table (auto-created on first start)
+  - Store the DSN securely (e.g. in your secrets manager) and rotate credentials using standard database procedures
 
 #### Step 10: Deploy Service
 
@@ -209,8 +218,8 @@ After deployment, the following directory structure is created:
 │   ├── client-cert.pem
 │   ├── client-key.pem
 │   └── rootCA.pem
-├── db/                # BadgerDB storage (auto-created)
-├── backups/           # Encrypted backups (auto-created)
+├── db/                # BadgerDB storage (auto-created when using badger)
+├── backups/           # Encrypted backups (auto-created when using badger)
 ├── identity/          # Node identity files (auto-created)
 │   ├── node0_identity.json
 │   ├── node1_identity.json

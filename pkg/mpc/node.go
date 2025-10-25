@@ -476,7 +476,7 @@ func (p *Node) getVersion(sessionType core.SessionType, walletID string) int {
 	case core.SessionTypeEDDSA:
 		composeKey = fmt.Sprintf("eddsa:%s", walletID)
 	default:
-		logger.Fatal("Unknown session type", errors.New("Unknown session type"))
+		logger.Fatal("unknown session type", errors.New("unknown session type"))
 	}
 	keyinfo, err := p.keyinfoStore.Get(composeKey)
 	if err != nil {

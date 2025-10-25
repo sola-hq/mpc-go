@@ -408,8 +408,32 @@ validate_config_credentials() {
     
     log_info "Validating config file: $config_file"
     
-    # Note: badger_password is provided via systemd credentials, not config.yaml
-    log_info "[i] badger_password will be provided via systemd credentials"
+    local storage_type=$(grep -E "^storage_type:" "$config_file" | head -n 1 | sed 's/.*storage_type: *//g' | sed 's/#.*//g' | tr -d '"' | tr -d "'" | tr '[:upper:]' '[:lower:]')
+    if [[ -z "$storage_type" ]]; then
+        storage_type="badger"
+    fi
+
+    case "$storage_type" in
+        badger)
+            log_info "[i] storage_type set to badger (default)"
+            log_info "[i] badger_password will be provided via systemd credentials"
+            ;;
+        postgres)
+            log_info "[i] storage_type set to postgres – validating DSN"
+            local pg_dsn=$(grep -A 10 "^postgres:" "$config_file" | grep "dsn:" | head -n 1 | sed 's/.*dsn: *//g' | sed 's/#.*//g' | tr -d '"' | tr -d "'")
+            if [[ -z "$pg_dsn" ]]; then
+                log_error "❌ postgres.dsn not configured in config.yaml"
+                ((errors++))
+            else
+                local masked_dsn=$(echo "$pg_dsn" | sed -E 's#://([^:@]+):([^@]+)@#://\1:***@#')
+                log_info "✓ postgres.dsn configured: $masked_dsn"
+            fi
+            ;;
+        *)
+            log_error "❌ unsupported storage_type '$storage_type' in config.yaml (expected badger or postgres)"
+            ((errors++))
+            ;;
+    esac
     
     # Check for required event_initiator_pubkey
     if ! grep -q "^event_initiator_pubkey:" "$config_file" || grep -q "^event_initiator_pubkey: *$" "$config_file" || grep -q '^event_initiator_pubkey: ""' "$config_file"; then

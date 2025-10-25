@@ -6,6 +6,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/fystack/mpcium/pkg/logger"
 	"github.com/go-viper/mapstructure/v2"
@@ -17,16 +18,22 @@ const (
 	Production  = "production"
 	Development = "development"
 
-	defaultStorageType            = "badger"
-	defaultBadgerDBPath           = "."
-	defaultBackupDir              = "backups"
-	defaultBackupPeriodSeconds    = 300
-	defaultMaxConcurrentKeygen    = 2
-	defaultMaxConcurrentSigning   = 10
-	defaultMaxConcurrentResharing = 5
-	defaultSessionWarmUpDelayMs   = 10
-	defaultThreshold              = 1
-	defaultInitiatorAlgorithm     = "ed25519"
+	StorageTypeBadger   = "badger"
+	StorageTypePostgres = "postgres"
+
+	defaultStorageType             = "badger"
+	defaultBadgerDBPath            = "."
+	defaultBackupDir               = "backups"
+	defaultBackupPeriodSeconds     = 300
+	defaultMaxConcurrentKeygen     = 2
+	defaultMaxConcurrentSigning    = 10
+	defaultMaxConcurrentResharing  = 5
+	defaultSessionWarmUpDelayMs    = 10
+	defaultThreshold               = 1
+	defaultInitiatorAlgorithm      = "ed25519"
+	defaultPostgresMaxIdleConns    = 5
+	defaultPostgresMaxOpenConns    = 10
+	defaultPostgresConnMaxLifetime = 30 * time.Minute
 
 	EnvConfigFile = "MPC_CONFIG_FILE"
 )
@@ -36,6 +43,7 @@ type Config struct {
 	NATs   *NATsConfig   `mapstructure:"nats"`
 
 	Environment string `mapstructure:"environment"`
+	StorageType string `mapstructure:"storage_type"`
 
 	// Storage configuration
 	BadgerPassword string `mapstructure:"badger_password"`
@@ -53,6 +61,11 @@ type Config struct {
 	MaxConcurrentSigning     int `mapstructure:"max_concurrent_signing"`
 	MaxConcurrentResharing   int `mapstructure:"max_concurrent_resharing"`
 	SessionWarmUpDelayMillis int `mapstructure:"session_warm_up_delay_ms"`
+
+	PostgresDSN             string        `mapstructure:"postgres_dsn"`
+	PostgresMaxIdleConns    int           `mapstructure:"postgres_max_idle_conns"`
+	PostgresMaxOpenConns    int           `mapstructure:"postgres_max_open_conns"`
+	PostgresConnMaxLifetime time.Duration `mapstructure:"postgres_conn_max_lifetime"`
 }
 
 type ConsulConfig struct {
@@ -201,6 +214,20 @@ func applyDefaults(cfg *Config) {
 	if cfg.EventInitiatorAlgorithm == "" {
 		cfg.EventInitiatorAlgorithm = defaultInitiatorAlgorithm
 	}
+	if cfg.StorageType == "" {
+		cfg.StorageType = defaultStorageType
+	}
+
+	// Postgres configuration
+	if cfg.PostgresMaxIdleConns == 0 {
+		cfg.PostgresMaxIdleConns = defaultPostgresMaxIdleConns
+	}
+	if cfg.PostgresMaxOpenConns == 0 {
+		cfg.PostgresMaxOpenConns = defaultPostgresMaxOpenConns
+	}
+	if cfg.PostgresConnMaxLifetime == 0 {
+		cfg.PostgresConnMaxLifetime = defaultPostgresConnMaxLifetime
+	}
 }
 
 func setConfig(cfg *Config) {
@@ -297,4 +324,8 @@ func BackupDir() string {
 
 func IsProduction() bool {
 	return strings.EqualFold(Environment(), Production)
+}
+
+func StorageType() string {
+	return GetConfig().StorageType
 }

@@ -496,7 +496,7 @@ func TestBadgerStore_BackupIntegration(t *testing.T) {
 		DBPath:              dbPath,
 	}
 
-	store, err := NewBadgerStore(config)
+	store, err := NewBadgerKVStore(config)
 	require.NoError(t, err)
 	defer store.Close()
 

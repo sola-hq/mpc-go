@@ -4,13 +4,19 @@ consul:
   address: localhost:8500
 threshold: 2
 environment: development
-badger_password: "{{.BadgerPassword}}"
 event_initiator_algorithm: "ed25519"  # or "ed25519", default: ed25519
 event_initiator_pubkey: "{{.EventInitiatorPubkey}}"
+storage_type: badger # options: badger, postgres
 db_path: "."  
+badger_password: "{{.BadgerPassword}}"
 backup_enabled: true
 backup_period_seconds: 300 # 5 minutes
 backup_dir: backups
+postgres_dsn: "postgres://postgres:postgres@localhost:5432/mpc?sslmode=disable"
+postgres_max_idle_conns: 5
+postgres_max_open_conns: 10
+postgres_conn_max_lifetime: 30m
 max_concurrent_keygen: 2
 max_concurrent_signing: 10
+max_concurrent_resharing: 5
 session_warm_up_delay_ms: 100

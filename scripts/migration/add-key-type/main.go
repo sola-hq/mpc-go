@@ -29,7 +29,7 @@ func main() {
 		DBPath:              dbPath,
 	}
 
-	badgerKv, err := storage.NewBadgerStore(config)
+	badgerKv, err := storage.NewBadgerKVStore(config)
 	if err != nil {
 		logger.Fatal("Failed to create badger kv store", err)
 	}

@@ -17,6 +17,7 @@ import (
 	"github.com/fystack/mpcium/pkg/logger"
 	"github.com/fystack/mpcium/pkg/messaging"
 	"github.com/fystack/mpcium/pkg/mpc"
+	"github.com/fystack/mpcium/pkg/storage"
 	"github.com/spf13/cobra"
 )
 
@@ -62,10 +63,16 @@ func runNode(cmd *cobra.Command, args []string) error {
 	}
 	logger.Init(cfg.Environment, debug)
 
+	storageType := cfg.StorageType
+
 	// Handle password file if provided
 	if passwordFile != "" {
-		if err := loadPasswordFromFile(cfg, passwordFile); err != nil {
-			return fmt.Errorf("failed to load password from file: %w", err)
+		if storageType == config.StorageTypeBadger {
+			if err := loadPasswordFromFile(cfg, passwordFile); err != nil {
+				return fmt.Errorf("failed to load password from file: %w", err)
+			}
+		} else {
+			logger.Warn("Ignoring badger password file because storage backend does not require it", "storage_type", storageType)
 		}
 	}
 	// Handle configuration based on prompt flag
@@ -81,15 +88,17 @@ func runNode(cmd *cobra.Command, args []string) error {
 	peers := LoadPeersFromConsul(consulClient)
 	nodeID := GetIDFromName(nodeName, peers)
 
-	badgerKV := NewBadgerKV(nodeName, nodeID)
-	defer badgerKV.Close()
+	kvStore := storage.NewKVStore(nodeName, nodeID)
+	defer kvStore.Close()
 
-	// Start background backup job
-	backupEnabled := cfg.BackupEnabled
-	if backupEnabled {
-		backupPeriodSeconds := cfg.BackupPeriodSeconds
-		stopBackup := StartPeriodicBackup(ctx, badgerKV, backupPeriodSeconds)
-		defer stopBackup()
+	if cfg.BackupEnabled {
+		if badgerStore, ok := kvStore.(*storage.BadgerStore); ok {
+			backupPeriodSeconds := cfg.BackupPeriodSeconds
+			stopBackup := StartPeriodicBackup(ctx, badgerStore, backupPeriodSeconds)
+			defer stopBackup()
+		} else {
+			logger.Info("Skipping local backup scheduler for non-Badger backend", "storage_type", storageType)
+		}
 	}
 
 	identityStore, err := identity.NewFileStore("identity", nodeName, decryptPrivateKey, agePasswordFile)
@@ -156,7 +165,7 @@ func runNode(cmd *cobra.Command, args []string) error {
 		peerIDs,
 		pubsub,
 		directMessaging,
-		badgerKV,
+		kvStore,
 		keyinfoStore,
 		peerRegistry,
 		identityStore,
